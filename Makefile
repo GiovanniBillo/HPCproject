@@ -3,8 +3,9 @@ CC = gcc
 MPICC = mpicc
 
 # Compiler flags
-CFLAGS = -Wall -Wextra -I./include
+CFLAGS = -Wall -Wextra -fopenmp -I./include
 MPI_FLAGS = -Wall -Wextra -I./include
+
 
 # Source and object files
 SRC_DIR = src

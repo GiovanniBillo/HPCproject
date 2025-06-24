@@ -114,12 +114,16 @@ inline int inject_energy ( const int      periodic,
                         {
                             // propagate the boundaries if needed
                             // check the serial version
+                            // !!! TODO (check)
+                            // plane[IDX(mysize[_x_]+1, y)] += energy;
                         }
                     
                     if ( (N[_y_] == 1) )
                         {
                             // propagate the boundaries if needed
                             // check the serial version
+                            // !!! TODO (check)
+                            // plane[IDX(x, mysize[_y_]+1)] += energy;
                         }
                 }                
         }
