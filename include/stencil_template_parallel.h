@@ -44,10 +44,10 @@ typedef struct {
 
 extern int inject_energy ( const int      ,
                            const int      ,
-			   const vec2_t  *,
-			   const double   ,
-                                 plane_t *,
-                           const vec2_t   );
+			               const vec2_t  *,
+			               const double   ,
+                           const vec2_t   ,   
+                           plane_t *      );
 
 
 extern int update_plane ( const int      ,
@@ -91,21 +91,41 @@ int output_energy_stat ( int      ,
 
 inline int inject_energy ( const int      periodic,
                            const int      Nsources,
-			   const vec2_t  *Sources,
-			   const double   energy,
-                                 plane_t *plane,
-                           const vec2_t   N
+			               const vec2_t  *Sources,
+			               const double   energy,
+                           const vec2_t   N,
+                           plane_t *plane
                            )
 {
-    const uint register sizex = plane->size[_x_]+2;
+    const uint register sizex = plane->size[_x_] + 2;
+    const uint register sizey = plane->size[_y_];
+    if (sizex <= 0 || sizey <= 0) {
+        fprintf(stderr, "ERROR: Invalid plane size: x=%d, y=%d\n", plane->size[_x_], plane->size[_y_]);
+        exit(EXIT_FAILURE);
+    }
+
+    // printf("sizex: %d sizey: %d \n", sizex, sizey);
+    // printf("total size of data (sizex * sizey %d \n", sizex*sizey);
+    // fflush(stdout);
+
+    
+
     double * restrict data = plane->data;
     
-   #define IDX( i, j ) ( (j)*sizex + (i) )
+    // printf("elements inside the N vec2_t: %d and %d \n", N[_x_], N[_y_]);
+    // fflush(stdout);
+
+    #define IDX( i, j ) ( (j)*sizex + 2 + (i) )
     for (int s = 0; s < Nsources; s++)
         {
             int x = Sources[s][_x_];
             int y = Sources[s][_y_];
-            
+            // printf("Source %d: x = %d, y = %d\n, Nsources: %d \n", s, x, y, Nsources);
+            // fflush(stdout);
+
+            // printf("IDX(%d, %d) = %d \n", x, y, IDX(x, y));
+            // fflush(stdout);
+
             data[ IDX(x,y) ] += energy;
             
             if ( periodic )
@@ -115,7 +135,7 @@ inline int inject_energy ( const int      periodic,
                             // propagate the boundaries if needed
                             // check the serial version
                             // !!! TODO (check)
-                            // plane[IDX(mysize[_x_]+1, y)] += energy;
+                            data[IDX(N[_x_]+1, y)] += energy;
                         }
                     
                     if ( (N[_y_] == 1) )
@@ -123,7 +143,7 @@ inline int inject_energy ( const int      periodic,
                             // propagate the boundaries if needed
                             // check the serial version
                             // !!! TODO (check)
-                            // plane[IDX(x, mysize[_y_]+1)] += energy;
+                            data[IDX(x, N[_y_]+1)] += energy;
                         }
                 }                
         }
@@ -162,10 +182,13 @@ inline int update_plane ( const int      periodic,
 
     double * restrict old = oldplane->data;
     double * restrict new = newplane->data;
-    
+
+    double full_result = 0.0;
+   
+    #pragma omp parallel for reduction(+:full_result) schedule(static) 
     for (uint j = 1; j <= ysize; j++)
-        for ( uint i = 1; i <= xsize; i++)
-            {
+        #pragma GCC unroll 4
+        for ( uint i = 1; i <= xsize; i++){
                 
                 // NOTE: (i-1,j), (i+1,j), (i,j-1) and (i,j+1) always exist even
                 //       if this patch is at some border without periodic conditions;
@@ -177,10 +200,19 @@ inline int update_plane ( const int      periodic,
                 //
                 // HINT : check the serial version for some optimization
                 //
-                new[ IDX(i,j) ] =
-                    old[ IDX(i,j) ] / 2.0 + ( old[IDX(i-1, j)] + old[IDX(i+1, j)] +
-                                              old[IDX(i, j-1)] + old[IDX(i, j+1)] ) /4.0 / 2.0;
                 
+                // new[ IDX(i,j) ] =
+                //     old[ IDX(i,j) ] / 2.0 + ( old[IDX(i-1, j)] + old[IDX(i+1, j)] +
+                //                               old[IDX(i, j-1)] + old[IDX(i, j+1)] ) /4.0 / 2.0;
+                double alpha = 0.6;
+                double result = old[ IDX(i,j) ] *alpha;
+                double sum_i  = (old[IDX(i-1, j)] + old[IDX(i+1, j)]) / 4.0 * (1-alpha);
+                double sum_j  = (old[IDX(i, j-1)] + old[IDX(i, j+1)]) / 4.0 * (1-alpha);
+
+                result += (sum_i + sum_j );
+                new[ IDX(i,j) ] = result;
+
+                full_result += result;
             }
 
     if ( periodic )
@@ -189,12 +221,22 @@ inline int update_plane ( const int      periodic,
                 {
                     // propagate the boundaries as needed
                     // check the serial version
+                for ( int i = 1; i <= xsize; i++ )
+                    {
+                        new[ i ] = new[ IDX(i, ysize) ];
+                        new[ IDX(i, ysize+1) ] = new[ i ];
+                    }
                 }
   
             if ( N[_y_] == 1 ) 
                 {
                     // propagate the boundaries as needed
                     // check the serial version
+                for ( int j = 1; j <= ysize; j++ )
+                    {
+                        new[ IDX( 0, j) ] = new[ IDX(xsize, j) ];
+                        new[ IDX( xsize+1, j) ] = new[ IDX(1, j) ];
+                    }
                 }
         }
 
@@ -223,8 +265,28 @@ inline int get_total_energy( plane_t *plane,
 
    #if defined(LONG_ACCURACY)    
     long double totenergy = 0;
+    #pragma omp parallel for reduction(+:totenergy) schedule(static)
+    for (int j = 1; j <= ysize; j++) {
+        int tid = omp_get_thread_num();
+        // printf("Inside get_total_energy:Thread %d processing row %d\n", tid, j);
+        #pragma GCC unroll 4
+        for (int i = 1; i <= xsize; i++) {
+            totenergy += data[IDX(i, j)];
+        }
+    }
+    *energy = (double)totenergy;
    #else
     double totenergy = 0;    
+    #pragma omp parallel for reduction(+:totenergy) schedule(static)
+    for (int j = 1; j <= ysize; j++) {
+        int tid = omp_get_thread_num();
+        // printf("Inside get_total_energy:Thread %d processing row %d\n", tid, j);
+        #pragma GCC unroll 4
+        for (int i = 1; i <= xsize; i++) {
+            totenergy += data[IDX(i, j)];
+        }
+    }
+    *energy = totenergy;
    #endif
 
     // HINT: you may attempt to
@@ -232,9 +294,9 @@ inline int get_total_energy( plane_t *plane,
     //       (ii) ask the compiler to do it
     // for instance
     // #pragma GCC unroll 4
-    for ( int j = 1; j <= ysize; j++ )
-        for ( int i = 1; i <= xsize; i++ )
-            totenergy += data[ IDX(i, j) ];
+    // for ( int j = 1; j <= ysize; j++ )
+    //     for ( int i = 1; i <= xsize; i++ )
+    //         totenergy += data[ IDX(i, j) ];
 
     
    #undef IDX

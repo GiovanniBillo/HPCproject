@@ -77,10 +77,10 @@ extern int get_total_energy( const int     [2],
 
 inline int inject_energy ( const int     periodic,
                            const int     Nsources,
-			   const int    *Sources,
-			   const double  energy,
-			   const int     mysize[2],
-                           double *plane )
+                           const int    *Sources,
+                           const double  energy,
+                           const int     mysize[2],
+                           double * plane )
 {
    #define IDX( i, j ) ( (j)*(mysize[_x_]+2) + (i) )
     for (int s = 0; s < Nsources; s++) {
@@ -142,7 +142,7 @@ inline int update_plane ( const int     periodic,
 
     #pragma omp parallel for reduction(+:full_result) schedule(static)
     for (int j = 1; j <= ysize; j++) {
-        int tid = omp_get_thread_num();
+        // int tid = omp_get_thread_num();
         // printf("Inside update_plane: Thread %d processing row %d\n", tid, j);
         #pragma GCC unroll 4
         for (int i = 1; i <= xsize; i++) {

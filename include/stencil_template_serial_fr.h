@@ -13,8 +13,6 @@
 #include <float.h>
 #include <math.h>
 
-
-
 #define NORTH 0
 #define SOUTH 1
 #define EAST  2
@@ -28,8 +26,6 @@
 
 #define _x_ 0
 #define _y_ 1
-
-
 
 // ============================================================
 //

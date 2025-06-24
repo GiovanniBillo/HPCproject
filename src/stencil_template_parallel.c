@@ -51,6 +51,18 @@ int main(int argc, char **argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &Rank);
     MPI_Comm_size(MPI_COMM_WORLD, &Ntasks);
     MPI_Comm_dup (MPI_COMM_WORLD, &myCOMM_WORLD);
+
+    // Validate minimum ranks
+    if (Ntasks < 2) {
+        if (Rank == 0) {
+            fprintf(stderr, "Error: Need at least 2 MPI ranks\n");
+        }
+        MPI_Finalize();
+        return 1;
+    } else{
+        printf("We have %d tasks to deal with \n", Ntasks);
+    }
+
   }
   
   
@@ -73,6 +85,7 @@ int main(int argc, char **argv)
   int current = OLD;
   double t1 = MPI_Wtime();   /* take wall-clock time */
   
+  unsigned int frame_size;
   for (int iter = 0; iter < Niterations; ++iter)
     
     {
@@ -80,20 +93,48 @@ int main(int argc, char **argv)
       MPI_Request reqs[8];
       
       /* new energy from sources */
-      inject_energy( periodic, Nsources_local, Sources_local, energy_per_source, &planes[current], N );
+      inject_energy( periodic, Nsources_local, Sources_local, energy_per_source, N, &planes[current]);
 
 
       /* -------------------------------------- */
 
       // [A] fill the buffers, and/or make the buffers' pointers pointing to the correct position
 
+      for (int i = 0; i < 4; ++i) {
+          buffers[SEND][i] = planes->data;
+
+          frame_size = (planes[OLD].size[_x_]+2) * (planes[OLD].size[_y_]+2);
+          // buffers[RECV][i] = planes[!current]->data;
       // [B] perfoem the halo communications
       //     (1) use Send / Recv
+    if (Rank == 0){
+        MPI_Send(
+            buffers[SEND][i],
+            frame_size, 
+            MPI_BYTE,
+            1,
+            SEND,
+            MPI_COMM_WORLD);
+    }
+    else if (Rank == 1){
+        MPI_Recv(
+            buffers[RECV][i],
+            frame_size, 
+            MPI_BYTE, 
+            0, 
+            RECV,
+            MPI_COMM_WORLD,
+            MPI_STATUS_IGNORE);
+    printf("Process 1 received number %f from process 0\n",
+           (*buffers)[SEND][i]);
+    fflush(stdout); 
+    }
+
       //     (2) use Isend / Irecv
       //         --> can you overlap communication and compution in this way?
       
       // [C] copy the haloes data
-
+    }        
       /* --------------------------------------  */
       /* update grid points */
       
@@ -527,10 +568,11 @@ int memory_allocate ( const int       *neighbours  ,
 
       Then, the "NEW" will be treated as "OLD" and viceversa.
 
-      These two memory regions are indexed by *plate_ptr:
+      These two memory regions are indexed by *plane_ptr:
 
-      planew_ptr[0] ==> the "OLD" region
-      plamew_ptr[1] ==> the "NEW" region
+      planes_ptr[0] ==> the "OLD" region
+      plames_ptr[1] ==> the "NEW" region
+      
 
 
       (ii) --- communications
@@ -540,7 +582,7 @@ int memory_allocate ( const int       *neighbours  ,
       north, south, east amd west.      
 
       To them you need to communicate at most mysizex or mysizey
-      daouble data.
+      double data.
 
       These buffers are indexed by the buffer_ptr pointer so
       that
@@ -553,33 +595,47 @@ int memory_allocate ( const int       *neighbours  ,
      */
 
   if (planes_ptr == NULL )
-    // an invalid pointer has been passed
-    // manage the situation
-    ;
-
+      {
+       int rank;
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+        if (rank == 0) {
+            fprintf(stderr, "[Rank %d] Fatal: NULL planes pointer\n", rank);
+        }
+        MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+      } 
+ 
 
   if (buffers_ptr == NULL )
-    // an invalid pointer has been passed
-    // manage the situation
-    ;
+    {
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    if (rank == 0) {
+        fprintf(stderr, "[Rank %d] Fatal: NULL buffers pointer\n", rank);
+    }
+    MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+    }
     
 
   // ··················································
   // allocate memory for data
   // we allocate the space needed for the plane plus a contour frame
-  // that will contains data form neighbouring MPI tasks
+  // that will contain data form neighbouring MPI tasks
+
   unsigned int frame_size = (planes_ptr[OLD].size[_x_]+2) * (planes_ptr[OLD].size[_y_]+2);
 
   planes_ptr[OLD].data = (double*)malloc( frame_size * sizeof(double) );
-  if ( planes_ptr[OLD].data == NULL )
-    // manage the malloc fail
-    ;
+  if ( planes_ptr[OLD].data == NULL ){
+        fprintf(stderr, "Error: Memory allocation for planes_ptr failed\n");
+        exit(EXIT_FAILURE); // or return an error code
+  }
   memset ( planes_ptr[OLD].data, 0, frame_size * sizeof(double) );
 
   planes_ptr[NEW].data = (double*)malloc( frame_size * sizeof(double) );
-  if ( planes_ptr[NEW].data == NULL )
+  if ( planes_ptr[NEW].data == NULL ){
     // manage the malloc fail
-    ;
+        fprintf(stderr, "Error: Memory allocation for planes_ptr failed\n");
+        exit(EXIT_FAILURE); // or return an error code
+  }
   memset ( planes_ptr[NEW].data, 0, frame_size * sizeof(double) );
 
 
@@ -599,13 +655,32 @@ int memory_allocate ( const int       *neighbours  ,
 
   // ··················································
   // allocate buffers
-  //
+  // unsigned int buffer_frame_size = (buffers_ptr[OLD].size[_x_]+2) * (buffers_ptr[OLD].size[_y_]+2);
 
+  unsigned int buffer_frame_size = frame_size; 
 
+  // allocate buffers 
+  // For both SEND=0 and RECV=1?? OR not?
+  // for all directions: NORTH=0 SOUTH=1 EAST=2 WEST=3
+  for (int i = 0; i < 4; ++i) {
+    (*buffers_ptr)[i] = malloc(frame_size * sizeof(double));
+    if ((*buffers_ptr)[i] == NULL) {
+        fprintf(stderr, "Error: Memory allocation for (*buffers_ptr)[SEND][%d] failed\n", i);
+        exit(EXIT_FAILURE);
+    }
+    memset((*buffers_ptr)[i], 0, frame_size * sizeof(double));
+    }
 
+   // for (int i = 0; i < 4; ++i) {
+   //  (*buffers_ptr)[RECV][i] = malloc(frame_size * sizeof(double));
+   //  if ((*buffers_ptr)[RECV][i] == NULL) {
+   //      fprintf(stderr, "Error: Memory allocation for (*buffers_ptr)[RECV][%d] failed\n", i);
+   //      exit(EXIT_FAILURE);
+   //  }
+   //  memset((*buffers_ptr)[RECV][i], 0, frame_size * sizeof(double));
+   //  }
 
   // ··················································
-
   
   return 0;
 }
@@ -622,12 +697,23 @@ int memory_allocate ( const int       *neighbours  ,
   if ( planes != NULL )
     {
       if ( planes[OLD].data != NULL )
-	free (planes[OLD].data);
+	    free (planes[OLD].data);
       
-      if ( planes[NEW].data != NULL )
-	free (planes[NEW].data);
+      if ( planes[NEW].data != NULL ){
+	    free (planes[NEW].data);
+
+      }
+        printf("All planes freed. \n");
     }
 
+  if ( buffers != NULL ){
+    for (int i = 0; i < 4; ++i) {
+        if ((*buffers)[i] != NULL) {
+            free(buffers);
+        }
+        printf("All buffers freed. \n");
+        }
+  }
       
   return 0;
 }

@@ -9,7 +9,7 @@
 
 
 #include "timeutils.h"
-#include "stencil_template_serial.h"
+#include "stencil_template_serial_fr.h"
 
 int dump ( const double *, const uint [2], const char *, double *, double * );
 
@@ -44,8 +44,8 @@ int main(int argc, char **argv)
 
   if ( injection_frequency > 1 )
     inject_energy( periodic, Nsources, Sources, energy_per_source, S, planes[current] );
-  
-  double start_time = get_wall_time();
+
+  double start_time = get_wall_time(); 
 
   for (int iter = 0; iter < Niterations; iter++)
     
@@ -89,8 +89,10 @@ int main(int argc, char **argv)
   printf("injected energy is %g, system energy is %g\n",
 	 injected_heat, system_heat );
 
-  double end_time = get_wall_time();
+  double end_time = get_wall_time(); 
   printf("Execution time: %f s\n", end_time - start_time);
+
+
   
   memory_release( planes[OLD], Sources );
   return 0;
@@ -262,8 +264,6 @@ int memory_allocate ( const int      size[2],
   unsigned int bytes = (size[_x_]+2)*(size[_y_]+2);
 
   planes_ptr[OLD] = (double*)malloc( 2*bytes*sizeof(double) );
-  
-  // memory initialization to 0 (reason why the first iterations have few values across threads) 
   memset ( planes_ptr[OLD], 0, 2*bytes*sizeof(double) );
   planes_ptr[NEW] = planes_ptr[OLD] + bytes;
       
