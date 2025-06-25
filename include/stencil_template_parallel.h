@@ -47,7 +47,8 @@ extern int inject_energy ( const int      ,
 			               const vec2_t  *,
 			               const double   ,
                            const vec2_t   ,   
-                           plane_t *      );
+                           plane_t *      ,  
+			   int             );
 
 
 extern int update_plane ( const int      ,
@@ -111,7 +112,7 @@ extern int memory_allocate ( const int       *,
  		      plane_t   *      );
 
 
-extern int memory_release (buffers_t *, plane_t   * );
+extern int memory_release (buffers_t *, plane_t   *,int ,  int );
 
 
 int output_energy_stat ( int      ,
@@ -127,8 +128,8 @@ inline int inject_energy ( const int      periodic,
 			               const vec2_t  *Sources,
 			               const double   energy,
                            const vec2_t   N,
-                           plane_t *plane
-                           )
+                           plane_t *plane,
+                           int verbose)
 {
     const uint register sizex = plane->size[_x_] + 2;
     const uint register sizey = plane->size[_y_];
@@ -136,10 +137,11 @@ inline int inject_energy ( const int      periodic,
         fprintf(stderr, "ERROR: Invalid plane size: x=%d, y=%d\n", plane->size[_x_], plane->size[_y_]);
         exit(EXIT_FAILURE);
     }
-
-    // printf("sizex: %d sizey: %d \n", sizex, sizey);
-    // printf("total size of data (sizex * sizey %d \n", sizex*sizey);
-    // fflush(stdout);
+    if (verbose > 0){
+	    printf("sizex: %d sizey: %d \n", sizex, sizey);
+	    printf("total size of data (sizex * sizey %d \n", sizex*sizey);
+	    fflush(stdout);
+    }
 
     
 
@@ -153,11 +155,14 @@ inline int inject_energy ( const int      periodic,
         {
             int x = Sources[s][_x_];
             int y = Sources[s][_y_];
-            printf("Source %d: x = %d, y = %d\n, Nsources: %d \n", s, x, y, Nsources);
-            fflush(stdout);
+	    if (verbose > 0){
+	    
+		    printf("Source %d: x = %d, y = %d\n, Nsources: %d \n", s, x, y, Nsources);
+		    fflush(stdout);
 
-            printf("IDX(%d, %d) = %d \n", x, y, IDX(x, y));
-            fflush(stdout);
+		    printf("IDX(%d, %d) = %d \n", x, y, IDX(x, y));
+		    fflush(stdout);
+	    }
 
             data[ IDX(x,y) ] += energy;
             
@@ -478,7 +483,7 @@ inline int memory_allocate ( const int       *neighbours  ,
   return 0;
 }
 
-inline int memory_release(buffers_t *buffers, plane_t *planes) {
+inline int memory_release(buffers_t *buffers, plane_t *planes, int Rank, int verbose) {
 
     if (planes[OLD].data) {
         free(planes[OLD].data);
@@ -493,7 +498,7 @@ inline int memory_release(buffers_t *buffers, plane_t *planes) {
         for (int i = 0; i < 4; i++) {
             buffers[i][0] = NULL; // Optional but safe
         }
-    printf("All planes freed.\n");
+    printf("plane at rank %d freed.\n", Rank);
 
 	}
     return 0;
@@ -594,7 +599,8 @@ extern int initialize ( MPI_Comm *,
                  vec2_t  **,
                  double   *,
                  plane_t  *,
-                 buffers_t * );
+                 buffers_t *,
+	       	 int       );
 
 inline int initialize ( MPI_Comm *Comm,
 		 int      Me,                  // the rank of the calling process
@@ -612,12 +618,12 @@ inline int initialize ( MPI_Comm *Comm,
 		 vec2_t **Sources_local,
 		 double  *energy_per_source,   // how much heat per source
 		 plane_t *planes,
-		 buffers_t *buffers
-		 )
+		 buffers_t *buffers,
+		 int      verbose)
 {
   int halt = 0;
   int ret;
-  int verbose = 0;
+  verbose = 0;
   
   // ··································································
   // set deffault values
@@ -920,5 +926,147 @@ if (verbose > 0){
   return 0;  
 }
 
+/**
+ *
+ * Updates ghost cells in the plane using received halo data (buffers[RECV][DIR]).
+ * 
+ * @param plane          The plane to update (planes[current] or planes[!current]).
+ * @param buffers        Array of send/recv buffers (buffers[RECV][DIR] for unpacking).
+ * @param width         Width of the local subdomain (including halos).
+ * @param height        Height of the local subdomain (including halos).
+ * @param neighbours    Array of neighbour ranks (MPI_PROC_NULL if no neighbour).
+ */
+void update_boundaries(plane_t *plane, buffers_t buffers[2], 
+                      int width, int height, const int neighbours[4],
+                      int verbose, int rank) {
+    
+    if (verbose) {
+        printf("Rank %d: Updating ghost cells...\n", rank);
+    }
 
+    // ---- EAST (left ghost column) ----
+    if (neighbours[EAST] != MPI_PROC_NULL) {
+        if (verbose) {
+            printf("Rank %d: Updating EAST ghost cells (left column at x=0):\n", rank);
+        }
+        for (int j = 1; j < height - 1; j++) {
+            if (verbose) {
+                printf("  y=%d: old=%f, new=%f\n", 
+                       j, plane->data[j * width], buffers[RECV][EAST][j - 1]);
+            }
+            plane->data[j * width] = buffers[RECV][EAST][j - 1];
+        }
+    }
 
+    // ---- WEST (right ghost column) ----
+    if (neighbours[WEST] != MPI_PROC_NULL) {
+        if (verbose) {
+            printf("Rank %d: Updating WEST ghost cells (right column at x=%d):\n", rank, width - 1);
+        }
+        for (int j = 1; j < height - 1; j++) {
+            if (verbose) {
+                printf("  y=%d: old=%f, new=%f\n", 
+                       j, plane->data[(j + 1) * width - 1], buffers[RECV][WEST][j - 1]);
+            }
+            plane->data[(j + 1) * width - 1] = buffers[RECV][WEST][j - 1];
+        }
+    }
+
+    // ---- NORTH (top ghost row) ----
+    if (neighbours[NORTH] != MPI_PROC_NULL) {
+        if (verbose) {
+            printf("Rank %d: Updating NORTH ghost cells (top row at y=0):\n", rank);
+        }
+        for (int i = 1; i < width - 1; i++) {
+            if (verbose) {
+                printf("  x=%d: old=%f, new=%f\n", 
+                       i, plane->data[i], buffers[RECV][NORTH][i - 1]);
+            }
+            plane->data[i] = buffers[RECV][NORTH][i - 1];
+        }
+    }
+
+    // ---- SOUTH (bottom ghost row) ----
+    if (neighbours[SOUTH] != MPI_PROC_NULL) {
+        if (verbose) {
+            printf("Rank %d: Updating SOUTH ghost cells (bottom row at y=%d):\n", rank, height - 1);
+        }
+        for (int i = 1; i < width - 1; i++) {
+            if (verbose) {
+                printf("  x=%d: old=%f, new=%f\n", 
+                       i, plane->data[(height - 1) * width + i], buffers[RECV][SOUTH][i - 1]);
+            }
+            plane->data[(height - 1) * width + i] = buffers[RECV][SOUTH][i - 1];
+        }
+    }
+}
+
+/**
+ * Packs boundary data into send buffers (buffers[SEND][DIR]).
+ * 
+ * @param plane          The plane to read from (planes[current]).
+ * @param buffers        Array of send/recv buffers (buffers[SEND][DIR] for packing).
+ * @param width         Width of the local subdomain (including halos).
+ * @param height        Height of the local subdomain (including halos).
+ * @param neighbours    Array of neighbour ranks (MPI_PROC_NULL if no neighbour).
+ */
+void pack_halos(const plane_t *plane, buffers_t buffers[2], 
+                int width, int height, const int neighbours[4],
+                int verbose, int rank) {
+    
+    if (verbose) {
+        printf("Rank %d: Packing halos...\n", rank);
+    }
+
+    // ---- EAST (send left interior column) ----
+    if (neighbours[EAST] != MPI_PROC_NULL) {
+        if (verbose) {
+            printf("Rank %d: Packing EAST halo (interior column at x=1):\n", rank);
+        }
+        for (int j = 1; j < height - 1; j++) {
+            buffers[SEND][EAST][j - 1] = plane->data[j * width + 1];
+            if (verbose) {
+                printf("  y=%d: %f\n", j, plane->data[j * width + 1]);
+            }
+        }
+    }
+
+    // ---- WEST (send right interior column) ----
+    if (neighbours[WEST] != MPI_PROC_NULL) {
+        if (verbose) {
+            printf("Rank %d: Packing WEST halo (interior column at x=%d):\n", rank, width - 2);
+        }
+        for (int j = 1; j < height - 1; j++) {
+            buffers[SEND][WEST][j - 1] = plane->data[(j + 1) * width - 2];
+            if (verbose) {
+                printf("  y=%d: %f\n", j, plane->data[(j + 1) * width - 2]);
+            }
+        }
+    }
+
+    // ---- NORTH (send top interior row) ----
+    if (neighbours[NORTH] != MPI_PROC_NULL) {
+        if (verbose) {
+            printf("Rank %d: Packing NORTH halo (interior row at y=1):\n", rank);
+        }
+        for (int i = 1; i < width - 1; i++) {
+            buffers[SEND][NORTH][i - 1] = plane->data[width + i];
+            if (verbose) {
+                printf("  x=%d: %f\n", i, plane->data[width + i]);
+            }
+        }
+    }
+
+    // ---- SOUTH (send bottom interior row) ----
+    if (neighbours[SOUTH] != MPI_PROC_NULL) {
+        if (verbose) {
+            printf("Rank %d: Packing SOUTH halo (interior row at y=%d):\n", rank, height - 2);
+        }
+        for (int i = 1; i < width - 1; i++) {
+            buffers[SEND][SOUTH][i - 1] = plane->data[(height - 2) * width + i];
+            if (verbose) {
+                printf("  x=%d: %f\n", i, plane->data[(height - 2) * width + i]);
+            }
+        }
+    }
+}
