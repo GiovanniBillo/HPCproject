@@ -10,7 +10,7 @@
 
 #include "stencil_template_parallel.h"
 
-
+#define HALO_TAG 42
 
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
@@ -53,6 +53,8 @@ int main(int argc, char **argv)
     MPI_Comm_dup (MPI_COMM_WORLD, &myCOMM_WORLD);
 
     // Validate minimum ranks
+  printf("Hello from rank %d of %d\n", Rank, Ntasks);
+  fflush(stdout);
     if (Ntasks < 2) {
         if (Rank == 0) {
             fprintf(stderr, "Error: Need at least 2 MPI ranks\n");
@@ -76,10 +78,16 @@ int main(int argc, char **argv)
     {
       printf("task %d is opting out with termination code %d\n",
 	     Rank, ret );
+      fflush(stdout);
       
       MPI_Finalize();
       return 0;
     }
+  else{
+      printf("task %d is starting successfully with code %d\n",
+	     Rank, ret );
+      fflush(stdout);
+  }
   
   
   int current = OLD;
@@ -87,23 +95,30 @@ int main(int argc, char **argv)
   
   unsigned int frame_size;
   for (int iter = 0; iter < Niterations; ++iter)
-    
     {
       
       MPI_Request reqs[8];
       
       /* new energy from sources */
-      inject_energy( periodic, Nsources_local, Sources_local, energy_per_source, N, &planes[current]);
-
+      int inj_ret = inject_energy( periodic, Nsources_local, Sources_local, energy_per_source, N, &planes[current]);
+      if (inj_ret != 0) {
+	    fprintf(stderr, "Rank %d: inject_energy failed with code %d\n", Rank, inj_ret);
+	    MPI_Abort(MPI_COMM_WORLD, inj_ret);
+      }
+      else {
+	    printf("Rank %d: inject_energy succeeded\n", Rank);
+	    fflush(stdout);
+      }
 
       /* -------------------------------------- */
 
       // [A] fill the buffers, and/or make the buffers' pointers pointing to the correct position
 
+      frame_size = (planes[OLD].size[_x_]+2) * (planes[OLD].size[_y_]+2);
       for (int i = 0; i < 4; ++i) {
-          buffers[SEND][i] = planes->data;
-
-          frame_size = (planes[OLD].size[_x_]+2) * (planes[OLD].size[_y_]+2);
+	   // printf("The data currently in planes[current] is: %f", *(planes[current].data));
+          (buffers)[SEND][i] = planes[!current].data;
+	
           // buffers[RECV][i] = planes[!current]->data;
       // [B] perfoem the halo communications
       //     (1) use Send / Recv
@@ -113,8 +128,11 @@ int main(int argc, char **argv)
             frame_size, 
             MPI_BYTE,
             1,
-            SEND,
+            HALO_TAG,
             MPI_COMM_WORLD);
+    printf("Process 0 sent number %f \n",
+           (*buffers)[SEND][i]);
+    fflush(stdout); 
     }
     else if (Rank == 1){
         MPI_Recv(
@@ -122,7 +140,7 @@ int main(int argc, char **argv)
             frame_size, 
             MPI_BYTE, 
             0, 
-            RECV,
+            HALO_TAG,
             MPI_COMM_WORLD,
             MPI_STATUS_IGNORE);
     printf("Process 1 received number %f from process 0\n",
@@ -152,7 +170,7 @@ int main(int argc, char **argv)
   t1 = MPI_Wtime() - t1;
 
   output_energy_stat ( -1, &planes[!current], Niterations * Nsources*energy_per_source, Rank, &myCOMM_WORLD );
-  
+  MPI_Barrier(myCOMM_WORLD);
   memory_release( buffers, planes );
   
   
@@ -187,11 +205,6 @@ int initialize_sources( int       ,
 			vec2_t  ** );
 
 
-// int memory_allocate ( const int       *,
-// 		      const vec2_t     ,
-// 		            buffers_t *,
-// 		            plane_t   * );
-		      
 
 int initialize ( MPI_Comm *Comm,
 		 int      Me,                  // the rank of the calling process
@@ -329,6 +342,10 @@ int initialize ( MPI_Comm *Comm,
   double formfactor = ((*S)[_x_] >= (*S)[_y_] ? (double)(*S)[_x_]/(*S)[_y_] : (double)(*S)[_y_]/(*S)[_x_] );
   int    dimensions = 2 - (Ntasks <= ((int)formfactor+1) );
 
+if (verbose > 0){
+	printf("formfactor: %f, dimensions: %d \n", formfactor, dimensions);
+
+}
   
   if ( dimensions == 1 )
     {
@@ -439,24 +456,37 @@ int initialize ( MPI_Comm *Comm,
 
 	  MPI_Barrier(*Comm);
 	}
-      
+      printf("neighbours determined and barrier overcome for Task %d.\n Onto Memory initialization now \n", Me);
+      fflush(stdout);
     }
 
   
   // ··································································
-  // allocae the needed memory
+  // allocate the needed memory
   //
   ret = memory_allocate(neighbours,
-                       N,
+                       *N, 
                        buffers, 
                        planes); 
-  
-
+  if (ret != 0) {
+       fprintf(stderr, "Rank %d: memory_allocate failed with code %d\n", Me, ret);
+       MPI_Abort(MPI_COMM_WORLD, ret);  
+  } else {
+        printf("Rank %d: memory_allocate succeeded\n", Me);
+        fflush(stdout);
+	}	
   // ··································································
-  // allocae the heat sources
+  // allocate the heat sources
   //
   ret = initialize_sources( Me, Ntasks, Comm, mysize, *Nsources, Nsources_local, Sources_local );
-  
+
+  if (ret != 0) {
+    fprintf(stderr, "Rank %d: initialize_sources failed with code %d\n", Me, ret);
+    MPI_Abort(MPI_COMM_WORLD, ret);
+  } else {
+    printf("Rank %d: initialize_sources succeeded\n", Me);
+    fflush(stdout);
+  }
   return 0;  
 }
 
@@ -662,13 +692,14 @@ int memory_allocate ( const int       *neighbours  ,
   // allocate buffers 
   // For both SEND=0 and RECV=1?? OR not?
   // for all directions: NORTH=0 SOUTH=1 EAST=2 WEST=3
-  for (int i = 0; i < 4; ++i) {
-    (*buffers_ptr)[i] = malloc(frame_size * sizeof(double));
-    if ((*buffers_ptr)[i] == NULL) {
-        fprintf(stderr, "Error: Memory allocation for (*buffers_ptr)[SEND][%d] failed\n", i);
+  for (int i = 0; i < 4; ++i)
+    for (int j = 0; j < 2; ++j){
+    (buffers_ptr)[j][i] = malloc(frame_size * sizeof(double));
+    if ((buffers_ptr)[j][i] == NULL) {
+        fprintf(stderr, "Error: Memory allocation for (*buffers_ptr)[%d][%d] failed\n", j, i);
         exit(EXIT_FAILURE);
     }
-    memset((*buffers_ptr)[i], 0, frame_size * sizeof(double));
+    memset((buffers_ptr)[j][i], 0, frame_size * sizeof(double));
     }
 
    // for (int i = 0; i < 4; ++i) {
@@ -687,37 +718,27 @@ int memory_allocate ( const int       *neighbours  ,
 
 
 
- int memory_release (buffers_t * buffers, 
-                 plane_t   *planes
-		      // ....
-		     )
-  
-{
+int memory_release(buffers_t *buffers, plane_t *planes) {
 
-  if ( planes != NULL )
-    {
-      if ( planes[OLD].data != NULL )
-	    free (planes[OLD].data);
-      
-      if ( planes[NEW].data != NULL ){
-	    free (planes[NEW].data);
-
-      }
-        printf("All planes freed. \n");
+    if (planes[OLD].data) {
+        free(planes[OLD].data);
+        planes[OLD].data = NULL;
     }
+    if (planes[NEW].data) {
+        free(planes[NEW].data);
+        planes[NEW].data = NULL;
+    }
+    // Explicitly NULL buffer pointers
+    if (buffers) {
+        for (int i = 0; i < 4; i++) {
+            buffers[i][0] = NULL; // Optional but safe
+        }
+    printf("All planes freed.\n");
 
-  if ( buffers != NULL ){
-    for (int i = 0; i < 4; ++i) {
-        if ((*buffers)[i] != NULL) {
-            free(buffers);
-        }
-        printf("All buffers freed. \n");
-        }
-  }
-      
-  return 0;
+	}
+    return 0;
 }
-
+ 
 
 
 int output_energy_stat ( int step, plane_t *plane, double budget, int Me, MPI_Comm *Comm )

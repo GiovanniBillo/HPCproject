@@ -76,6 +76,10 @@ int initialize ( MPI_Comm *,
                  double   *,
                  plane_t  *,
                  buffers_t * );
+int memory_allocate ( const int       *,
+ 		      const vec2_t     ,
+ 		      buffers_t *      ,
+ 		      plane_t   *      );
 
 
 int memory_release (buffers_t *, plane_t   * );
@@ -120,11 +124,11 @@ inline int inject_energy ( const int      periodic,
         {
             int x = Sources[s][_x_];
             int y = Sources[s][_y_];
-            // printf("Source %d: x = %d, y = %d\n, Nsources: %d \n", s, x, y, Nsources);
-            // fflush(stdout);
+            printf("Source %d: x = %d, y = %d\n, Nsources: %d \n", s, x, y, Nsources);
+            fflush(stdout);
 
-            // printf("IDX(%d, %d) = %d \n", x, y, IDX(x, y));
-            // fflush(stdout);
+            printf("IDX(%d, %d) = %d \n", x, y, IDX(x, y));
+            fflush(stdout);
 
             data[ IDX(x,y) ] += energy;
             
