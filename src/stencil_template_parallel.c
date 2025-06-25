@@ -18,9 +18,9 @@
 int main(int argc, char **argv)
 {
   MPI_Comm myCOMM_WORLD;
-  int  Rank, Ntasks, verbose;
+  int  Rank, Ntasks;
+  int verbose = 0;
   uint neighbours[4];
-
   int  Niterations;
   int  periodic;
   vec2_t S, N;
@@ -52,13 +52,22 @@ int main(int argc, char **argv)
     MPI_Comm_size(MPI_COMM_WORLD, &Ntasks);
     MPI_Comm_dup (MPI_COMM_WORLD, &myCOMM_WORLD);
 
-    // Validate minimum ranks
+  
+
+  }
+  
+  /* argument checking and setting */
+  int ret = initialize ( &myCOMM_WORLD, Rank, Ntasks, argc, argv, &S, &N, &periodic, &output_energy_stat_perstep,
+			 neighbours, &Niterations,
+			 &Nsources, &Nsources_local, &Sources_local, &energy_per_source,
+			 &planes[0], &buffers[0], &verbose);
+  // Validate minimum ranks
   if (verbose > 0){
 	  printf("Hello from rank %d of %d\n", Rank, Ntasks);
 	  fflush(stdout);
   }
 
-    if (Ntasks < 2) {
+  if (Ntasks < 2) {
         if (Rank == 0) {
             fprintf(stderr, "Error: Need at least 2 MPI ranks\n");
         }
@@ -66,16 +75,7 @@ int main(int argc, char **argv)
         return 1;
     } else{
         printf("We have %d tasks to deal with \n", Ntasks);
-    }
-
   }
-  
-  
-  /* argument checking and setting */
-  int ret = initialize ( &myCOMM_WORLD, Rank, Ntasks, argc, argv, &S, &N, &periodic, &output_energy_stat_perstep,
-			 neighbours, &Niterations,
-			 &Nsources, &Nsources_local, &Sources_local, &energy_per_source,
-			 &planes[0], &buffers[0], verbose);
 
   if ( ret )
     {
@@ -247,7 +247,7 @@ int main(int argc, char **argv)
       /* --------------------------------------  */
       /* update grid points */
       
-      update_plane( periodic, N, &planes[current], &planes[!current] );
+      update_plane( periodic, N, &planes[current], &planes[!current]);
 
       /* output if needed */
       if ( output_energy_stat_perstep )

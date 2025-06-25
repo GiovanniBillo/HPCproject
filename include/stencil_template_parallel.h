@@ -1,4 +1,4 @@
-/* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil ; -*- */
+/* -*- Mode: C; c-basic-offset:4 ; indent-tabs-mode:nil ; -*- *&/
 /*
  * See COPYRIGHT in top-level directory.
  */
@@ -497,7 +497,7 @@ inline int memory_release(buffers_t *buffers, plane_t *planes, int Rank, int ver
     if (buffers) {
         for (int i = 0; i < 4; i++) {
             buffers[i][0] = NULL; // Optional but safe
-        }
+        
     printf("plane at rank %d freed.\n", Rank);
 
 	}
@@ -600,7 +600,7 @@ extern int initialize ( MPI_Comm *,
                  double   *,
                  plane_t  *,
                  buffers_t *,
-	       	 int       );
+	       	 int       *);
 
 inline int initialize ( MPI_Comm *Comm,
 		 int      Me,                  // the rank of the calling process
@@ -619,11 +619,10 @@ inline int initialize ( MPI_Comm *Comm,
 		 double  *energy_per_source,   // how much heat per source
 		 plane_t *planes,
 		 buffers_t *buffers,
-		 int      verbose)
+		 int      * verbose)
 {
   int halt = 0;
   int ret;
-  verbose = 0;
   
   // ··································································
   // set deffault values
@@ -636,7 +635,7 @@ inline int initialize ( MPI_Comm *Comm,
   *Sources_local    = NULL;
   *Niterations      = 1000;
   *energy_per_source = 1.0;
-
+  *verbose = 0;
   if ( planes == NULL ) {
     // manage the situation
   }
@@ -682,7 +681,7 @@ inline int initialize ( MPI_Comm *Comm,
 	  case 'p': *periodic = (atoi(optarg) > 0);
 	    break;
 
-	  case 'v': verbose = atoi(optarg);
+	  case 'v': *verbose = atoi(optarg);
 	    break;
 
 	  case 'h': {
@@ -748,7 +747,7 @@ if (!valid) {
     return 1;
 }
 
-if (Me == 0 && verbose > 0) {
+if (Me == 0 && *verbose > 0) {
     printf("\nParameter validation and values:\n");
     printf("--------------------------------\n");
     printf("Plate size (x, y): %u, %u\n", (*S)[_x_], (*S)[_y_]);
@@ -757,7 +756,7 @@ if (Me == 0 && verbose > 0) {
     printf("Energy per source: %.2f\n", *energy_per_source);
     printf("Number of iterations: %d\n", *Niterations);
     printf("Output energy statistics: %d\n", *output_energy_stat);
-    printf("Verbose level: %d\n", verbose);
+    printf("Verbose level: %d\n", *verbose);
     printf("--------------------------------\n\n");
     fflush(stdout);
 }
@@ -778,7 +777,7 @@ if (Me == 0 && verbose > 0) {
   double formfactor = ((*S)[_x_] >= (*S)[_y_] ? (double)(*S)[_x_]/(*S)[_y_] : (double)(*S)[_y_]/(*S)[_x_] );
   int    dimensions = 2 - (Ntasks <= ((int)formfactor+1) );
 
-if (verbose > 0){
+if (*verbose > 0){
 	printf("formfactor: %f, dimensions: %d \n", formfactor, dimensions);
 
 }
@@ -867,7 +866,7 @@ if (verbose > 0){
   planes[NEW].size[1] = mysize[1];
   
 
-  if ( verbose > 0 )
+  if ( *verbose > 0 )
     {
       if ( Me == 0 ) {
 	printf("Tasks are decomposed in a grid %d x %d\n\n",
@@ -940,17 +939,17 @@ void update_boundaries(plane_t *plane, buffers_t buffers[2],
                       int width, int height, const int neighbours[4],
                       int verbose, int rank) {
     
-    if (verbose) {
+    if (verbose > 0) {
         printf("Rank %d: Updating ghost cells...\n", rank);
     }
 
     // ---- EAST (left ghost column) ----
     if (neighbours[EAST] != MPI_PROC_NULL) {
-        if (verbose) {
+        if (verbose > 0) {
             printf("Rank %d: Updating EAST ghost cells (left column at x=0):\n", rank);
         }
         for (int j = 1; j < height - 1; j++) {
-            if (verbose) {
+            if (verbose > 0) {
                 printf("  y=%d: old=%f, new=%f\n", 
                        j, plane->data[j * width], buffers[RECV][EAST][j - 1]);
             }
@@ -960,11 +959,11 @@ void update_boundaries(plane_t *plane, buffers_t buffers[2],
 
     // ---- WEST (right ghost column) ----
     if (neighbours[WEST] != MPI_PROC_NULL) {
-        if (verbose) {
+        if (verbose > 0) {
             printf("Rank %d: Updating WEST ghost cells (right column at x=%d):\n", rank, width - 1);
         }
         for (int j = 1; j < height - 1; j++) {
-            if (verbose) {
+            if (verbose > 0) {
                 printf("  y=%d: old=%f, new=%f\n", 
                        j, plane->data[(j + 1) * width - 1], buffers[RECV][WEST][j - 1]);
             }
@@ -974,11 +973,11 @@ void update_boundaries(plane_t *plane, buffers_t buffers[2],
 
     // ---- NORTH (top ghost row) ----
     if (neighbours[NORTH] != MPI_PROC_NULL) {
-        if (verbose) {
+        if (verbose > 0) {
             printf("Rank %d: Updating NORTH ghost cells (top row at y=0):\n", rank);
         }
         for (int i = 1; i < width - 1; i++) {
-            if (verbose) {
+            if (verbose > 0) {
                 printf("  x=%d: old=%f, new=%f\n", 
                        i, plane->data[i], buffers[RECV][NORTH][i - 1]);
             }
@@ -988,11 +987,11 @@ void update_boundaries(plane_t *plane, buffers_t buffers[2],
 
     // ---- SOUTH (bottom ghost row) ----
     if (neighbours[SOUTH] != MPI_PROC_NULL) {
-        if (verbose) {
+        if (verbose > 0) {
             printf("Rank %d: Updating SOUTH ghost cells (bottom row at y=%d):\n", rank, height - 1);
         }
         for (int i = 1; i < width - 1; i++) {
-            if (verbose) {
+            if (verbose > 0) {
                 printf("  x=%d: old=%f, new=%f\n", 
                        i, plane->data[(height - 1) * width + i], buffers[RECV][SOUTH][i - 1]);
             }
@@ -1014,58 +1013,68 @@ void pack_halos(const plane_t *plane, buffers_t buffers[2],
                 int width, int height, const int neighbours[4],
                 int verbose, int rank) {
     
-    if (verbose) {
+    if (verbose > 0) {
         printf("Rank %d: Packing halos...\n", rank);
+    	fflush(stdout);
+
     }
 
     // ---- EAST (send left interior column) ----
     if (neighbours[EAST] != MPI_PROC_NULL) {
-        if (verbose) {
+        if (verbose > 0) {
             printf("Rank %d: Packing EAST halo (interior column at x=1):\n", rank);
+    	fflush(stdout);
         }
         for (int j = 1; j < height - 1; j++) {
             buffers[SEND][EAST][j - 1] = plane->data[j * width + 1];
-            if (verbose) {
+            if (verbose > 0) {
                 printf("  y=%d: %f\n", j, plane->data[j * width + 1]);
+    		fflush(stdout);
             }
         }
     }
 
     // ---- WEST (send right interior column) ----
     if (neighbours[WEST] != MPI_PROC_NULL) {
-        if (verbose) {
+        if (verbose > 0) {
             printf("Rank %d: Packing WEST halo (interior column at x=%d):\n", rank, width - 2);
+    	fflush(stdout);
         }
         for (int j = 1; j < height - 1; j++) {
             buffers[SEND][WEST][j - 1] = plane->data[(j + 1) * width - 2];
-            if (verbose) {
+            if (verbose> 0) {
                 printf("  y=%d: %f\n", j, plane->data[(j + 1) * width - 2]);
+    		fflush(stdout);
             }
         }
     }
 
     // ---- NORTH (send top interior row) ----
     if (neighbours[NORTH] != MPI_PROC_NULL) {
-        if (verbose) {
+        if (verbose > 0) {
             printf("Rank %d: Packing NORTH halo (interior row at y=1):\n", rank);
+    	fflush(stdout);
         }
         for (int i = 1; i < width - 1; i++) {
             buffers[SEND][NORTH][i - 1] = plane->data[width + i];
-            if (verbose) {
+            if (verbose> 0) {
                 printf("  x=%d: %f\n", i, plane->data[width + i]);
+    		fflush(stdout);
             }
         }
     }
 
     // ---- SOUTH (send bottom interior row) ----
     if (neighbours[SOUTH] != MPI_PROC_NULL) {
-        if (verbose) {
+        if (verbose > 0) {
             printf("Rank %d: Packing SOUTH halo (interior row at y=%d):\n", rank, height - 2);
+    	fflush(stdout);
         }
         for (int i = 1; i < width - 1; i++) {
             buffers[SEND][SOUTH][i - 1] = plane->data[(height - 2) * width + i];
-            if (verbose) {
+            if (verbose > 0) {
                 printf("  x=%d: %f\n", i, plane->data[(height - 2) * width + i]);
+    		fflush(stdout);
             }
         }
     }
