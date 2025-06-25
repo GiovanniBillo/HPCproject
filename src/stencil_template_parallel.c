@@ -262,7 +262,7 @@ int main(int argc, char **argv)
 
   output_energy_stat ( -1, &planes[!current], Niterations * Nsources*energy_per_source, Rank, &myCOMM_WORLD );
   MPI_Barrier(myCOMM_WORLD);
-  memory_release( buffers, planes, Rank, verbose );
+  memory_release(buffers, planes, Rank, verbose);
   
   
   MPI_Finalize();

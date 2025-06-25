@@ -44,8 +44,8 @@ typedef struct {
 
 extern int inject_energy ( const int      ,
                            const int      ,
-			               const vec2_t  *,
-			               const double   ,
+			   const vec2_t  *,
+			   const double   ,
                            const vec2_t   ,   
                            plane_t *      ,  
 			   int             );
@@ -54,11 +54,10 @@ extern int inject_energy ( const int      ,
 extern int update_plane ( const int      ,
                           const vec2_t   ,
                           const plane_t *,
-                                plane_t * );
+                          plane_t * );
 
 
-extern int get_total_energy( plane_t *,
-                             double  * );
+extern int get_total_energy( plane_t *, double  * );
 /* ==========================================================================
    =                                                                        =
    =   initialization                                                       =
@@ -268,7 +267,7 @@ inline int update_plane ( const int      periodic,
   
             if ( N[_y_] == 1 ) 
                 {
-                    // propagate the boundaries as needed
+                   // // propagate the boundaries as needed
                     // check the serial version
                 for ( int j = 1; j <= ysize; j++ )
                     {
@@ -502,6 +501,7 @@ inline int memory_release(buffers_t *buffers, plane_t *planes, int Rank, int ver
 
 	}
     return 0;
+	}
 }
 
 extern int initialize_sources( int       ,
@@ -600,7 +600,7 @@ extern int initialize ( MPI_Comm *,
                  double   *,
                  plane_t  *,
                  buffers_t *,
-	       	 int       *);
+		 int       *);
 
 inline int initialize ( MPI_Comm *Comm,
 		 int      Me,                  // the rank of the calling process
