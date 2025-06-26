@@ -12,7 +12,10 @@
 
 #define HALO_TAG 42
 
-double comm_time = 0;
+// global time counters
+double comm_time = 0.0, comp_time = 0.0;
+double loop_start_time = 0.0, loop_end_time = 0.0;
+double thread_times[MAX_THREADS] = {0.0};
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
 
@@ -99,8 +102,8 @@ int main(int argc, char **argv)
   
   
   int current = OLD;
-  double t1 = MPI_Wtime();   /* take wall-clock time */
-  
+  // double t1 = MPI_Wtime();   /* take wall-clock time */
+  START_LOOP_TIMER(); 
   unsigned int old_frame_size, new_frame_size;
   for (int iter = 0; iter < Niterations; ++iter)
     {
@@ -262,33 +265,30 @@ int main(int argc, char **argv)
       current = !current;
       
     }
-  
-  t1 = MPI_Wtime() - t1;
+  STOP_LOOP_TIMER();  
+  // t1 = MPI_Wtime() - t1;
 
   output_energy_stat ( -1, &planes[!current], Niterations * Nsources*energy_per_source, Rank, &myCOMM_WORLD );
   TIME_MPI_CALL(MPI_Barrier(myCOMM_WORLD), comm_time);
-  
-
-  int flag;
-  int *wtime_is_global;
-  MPI_Comm_get_attr(MPI_COMM_WORLD, MPI_WTIME_IS_GLOBAL, &wtime_is_global, &flag);
 
   memory_release(buffers, planes, Rank, verbose);
-  double compute_time = t1 - comm_time;
-  printf("Rank %d: total %.3f s | comm %.3f s | comp %.3f s\n", Rank, t1, comm_time, compute_time);
+  // double compute_time = t1 - comm_time;
+  //printf("Rank %d: total %.3f s | comm %.3f s | comp %.3f s\n", Rank, t1, comm_time, compute_time);
+//
+  //double global_comm_time;
+  //double max_comm_time;
+  //MPI_Reduce(&comm_time, &global_comm_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+  //MPI_Reduce(&comm_time, &max_comm_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+  //double avg_comm_time = global_comm_time/Ntasks;
+   //if (Rank == 0){
+    //printf("Total time for loop :%.6f s\n", t1); 
+    //printf("Total COMMUNICATION time (sum over all Ranks): %.6f s\n", global_comm_time); 
+    //printf("MAX COMMUNICATION time in loop:%.6f s\n", max_comm_time); 
+    //printf("AVERAGE COMMUNICATION time in loop:%.6f s\n", avg_comm_time); 
+    //printf("AVERAGE COMPUTATION time for loop:%.6f s\n", t1 - avg_comm_time); 
+  //} 
+  report_timing_stats(myCOMM_WORLD, Rank, Ntasks, "Main Loop", 0);
 
-  double global_comm_time;
-  double max_comm_time;
-  MPI_Reduce(&comm_time, &global_comm_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-  MPI_Reduce(&comm_time, &max_comm_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-  double avg_comm_time = global_comm_time/Ntasks;
-   if (Rank == 0){
-    printf("Total time for loop :%.6f s\n", t1); 
-    printf("Total COMMUNICATION time (sum over all Ranks): %.6f s\n", global_comm_time); 
-    printf("MAX COMMUNICATION time in loop:%.6f s\n", max_comm_time); 
-    printf("AVERAGE COMMUNICATION time in loop:%.6f s\n", avg_comm_time); 
-    printf("AVERAGE COMPUTATION time for loop:%.6f s\n", t1 - avg_comm_time); 
-  } 
   
   MPI_Finalize();
   return 0;
