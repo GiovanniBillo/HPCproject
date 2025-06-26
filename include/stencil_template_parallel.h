@@ -12,9 +12,10 @@
 #include <time.h>
 #include <math.h>
 
-#include <omp.h>
-#include <mpi.h>
+//#include <omp.h>
+//#include <mpi.h>
 
+#include "timing.h"
 
 #define NORTH 0
 #define SOUTH 1
@@ -29,6 +30,7 @@
 
 #define _x_ 0
 #define _y_ 1
+
 
 typedef unsigned int uint;
 
@@ -497,12 +499,12 @@ inline int memory_release(buffers_t *buffers, plane_t *planes, int Rank, int ver
         for (int i = 0; i < 4; i++) {
             buffers[i][0] = NULL; // Optional but safe
         
-    printf("plane at rank %d freed.\n", Rank);
+	    if (Rank == 0)
+		    printf("plane at rank %d freed.\n", Rank);
 
 	}
     }
     return 0;
-	}
 }
 
 extern int initialize_sources( int       ,
@@ -531,8 +533,8 @@ inline int initialize_sources( int       Me,
       for ( int i = 0; i < Nsources; i++ )
 	tasks_with_sources[i] = (int)lrand48() % Ntasks;
     }
-  
-  MPI_Bcast( tasks_with_sources, Nsources, MPI_INT, 0, *Comm );
+ 
+  TIME_MPI_CALL(MPI_Bcast( tasks_with_sources, Nsources, MPI_INT, 0, *Comm ), comm_time);
 
   int nlocal = 0;
   for ( int i = 0; i < Nsources; i++ )
@@ -565,7 +567,7 @@ inline int output_energy_stat ( int step, plane_t *plane, double budget, int Me,
   double tot_system_energy = 0;
   get_total_energy ( plane, &system_energy );
   
-  MPI_Reduce ( &system_energy, &tot_system_energy, 1, MPI_DOUBLE, MPI_SUM, 0, *Comm );
+  TIME_MPI_CALL(MPI_Reduce ( &system_energy, &tot_system_energy, 1, MPI_DOUBLE, MPI_SUM, 0, *Comm ), comm_time);
   
   if ( Me == 0 )
     {
@@ -875,7 +877,7 @@ if (*verbose > 0){
 	fflush(stdout);
       }
 
-      MPI_Barrier(*Comm);
+      TIME_MPI_CALL(MPI_Barrier(*Comm), comm_time);
       
       for ( int t = 0; t < Ntasks; t++ )
 	{

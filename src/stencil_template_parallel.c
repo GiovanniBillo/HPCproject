@@ -12,11 +12,13 @@
 
 #define HALO_TAG 42
 
+double comm_time = 0;
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
 
 int main(int argc, char **argv)
 {
+
   MPI_Comm myCOMM_WORLD;
   int  Rank, Ntasks;
   int verbose = 0;
@@ -159,10 +161,11 @@ int main(int argc, char **argv)
 		   ((double*)buffers[SEND][EAST])[1],
 		   ((double*)buffers[SEND][EAST])[2]);
 		}
-	    MPI_Send(buffers[SEND][EAST], buffer_height, MPI_BYTE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD);
+		
+	    TIME_MPI_CALL(MPI_Send(buffers[SEND][EAST], buffer_height, MPI_BYTE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD), comm_time);
 	}
 	if (neighbours[WEST] != MPI_PROC_NULL) {
-	    MPI_Recv(buffers[RECV][WEST], buffer_height, MPI_BYTE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	    TIME_MPI_CALL(MPI_Recv(buffers[RECV][WEST], buffer_height, MPI_BYTE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE), comm_time);
 		if (verbose > 0){
 		    printf("Rank %d: Received EAST  from %d. First 3 values: %f, %f, %f\n", 
 		   Rank, neighbours[EAST],
@@ -181,10 +184,10 @@ int main(int argc, char **argv)
 		   ((double*)buffers[SEND][WEST])[1],
 		   ((double*)buffers[SEND][WEST])[2]);
 		}
-    MPI_Send(buffers[SEND][WEST], buffer_height, MPI_BYTE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD);
+    TIME_MPI_CALL(MPI_Send(buffers[SEND][WEST], buffer_height, MPI_BYTE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD), comm_time);
 	}
 	if (neighbours[EAST] != MPI_PROC_NULL) {
-	    MPI_Recv(buffers[RECV][EAST], buffer_height, MPI_BYTE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	    TIME_MPI_CALL(MPI_Recv(buffers[RECV][EAST], buffer_height, MPI_BYTE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE), comm_time);
 		if (verbose > 0){
 		    printf("Rank %d: Received WEST  from %d. First 3 values: %f, %f, %f\n", 
 		   Rank, neighbours[WEST],
@@ -205,10 +208,10 @@ int main(int argc, char **argv)
 		   ((double*)buffers[SEND][NORTH])[2]);
 		}
 
-	    MPI_Send(buffers[SEND][NORTH], buffer_height, MPI_BYTE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD);
+	    TIME_MPI_CALL(MPI_Send(buffers[SEND][NORTH], buffer_height, MPI_BYTE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD), comm_time);
 	}
 	if (neighbours[SOUTH] != MPI_PROC_NULL) {
-	    MPI_Recv(buffers[RECV][SOUTH], buffer_width, MPI_BYTE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	    TIME_MPI_CALL(MPI_Recv(buffers[RECV][SOUTH], buffer_width, MPI_BYTE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE), comm_time);
 		if (verbose > 0){
 		    printf("Rank %d: Received NORTH  from %d. First 3 values: %f, %f, %f\n", 
 		   Rank, neighbours[NORTH],
@@ -228,10 +231,10 @@ int main(int argc, char **argv)
 		   ((double*)buffers[SEND][SOUTH])[2]);
 		}
 
-	    MPI_Send(buffers[SEND][SOUTH], buffer_width, MPI_BYTE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD);
+	    TIME_MPI_CALL(MPI_Send(buffers[SEND][SOUTH], buffer_width, MPI_BYTE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD), comm_time);
 	}
 	if (neighbours[NORTH] != MPI_PROC_NULL) {
-	    MPI_Recv(buffers[RECV][NORTH], buffer_width, MPI_BYTE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	    TIME_MPI_CALL(MPI_Recv(buffers[RECV][NORTH], buffer_width, MPI_BYTE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE), comm_time);
 		if (verbose > 0){
 		    printf("Rank %d: Received SOUTH  from %d. First 3 values: %f, %f, %f\n", 
 		   Rank, neighbours[SOUTH],
@@ -263,9 +266,29 @@ int main(int argc, char **argv)
   t1 = MPI_Wtime() - t1;
 
   output_energy_stat ( -1, &planes[!current], Niterations * Nsources*energy_per_source, Rank, &myCOMM_WORLD );
-  MPI_Barrier(myCOMM_WORLD);
-  memory_release(buffers, planes, Rank, verbose);
+  TIME_MPI_CALL(MPI_Barrier(myCOMM_WORLD), comm_time);
   
+
+  int flag;
+  int *wtime_is_global;
+  MPI_Comm_get_attr(MPI_COMM_WORLD, MPI_WTIME_IS_GLOBAL, &wtime_is_global, &flag);
+
+  memory_release(buffers, planes, Rank, verbose);
+  double compute_time = t1 - comm_time;
+  printf("Rank %d: total %.3f s | comm %.3f s | comp %.3f s\n", Rank, t1, comm_time, compute_time);
+
+  double global_comm_time;
+  double max_comm_time;
+  MPI_Reduce(&comm_time, &global_comm_time, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+  MPI_Reduce(&comm_time, &max_comm_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+  double avg_comm_time = global_comm_time/Ntasks;
+   if (Rank == 0){
+    printf("Total time for loop :%.6f s\n", t1); 
+    printf("Total COMMUNICATION time (sum over all Ranks): %.6f s\n", global_comm_time); 
+    printf("MAX COMMUNICATION time in loop:%.6f s\n", max_comm_time); 
+    printf("AVERAGE COMMUNICATION time in loop:%.6f s\n", avg_comm_time); 
+    printf("AVERAGE COMPUTATION time for loop:%.6f s\n", t1 - avg_comm_time); 
+  } 
   
   MPI_Finalize();
   return 0;
