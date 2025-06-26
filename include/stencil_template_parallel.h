@@ -500,6 +500,7 @@ inline int memory_release(buffers_t *buffers, plane_t *planes, int Rank, int ver
     printf("plane at rank %d freed.\n", Rank);
 
 	}
+    }
     return 0;
 	}
 }
