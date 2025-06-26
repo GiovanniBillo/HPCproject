@@ -73,12 +73,18 @@ int main(int argc, char **argv)
   }
 
   if (Ntasks < 2) {
-        if (Rank == 0) {
-            fprintf(stderr, "Error: Need at least 2 MPI ranks\n");
-        }
-        MPI_Finalize();
-        return 1;
-    } else{
+        //if (Rank == 0) {
+            //fprintf(stderr, "Error: Need at least 2 MPI ranks\n");
+        //}
+        //MPI_Finalize();
+        //return 1;
+	  if (Rank == 0) {
+	    fprintf(stderr, "Warning: Running in serial mode with a single MPI rank. Communications will be skipped.\n");
+	  }
+	  // set all neighbours to MPI_PROC_NULL to avoid sends/recvs
+	  for (int i = 0; i < 4; ++i) neighbours[i] = MPI_PROC_NULL;	
+  }
+  else{
         printf("We have %d tasks to deal with \n", Ntasks);
   }
 
@@ -269,7 +275,9 @@ int main(int argc, char **argv)
   // t1 = MPI_Wtime() - t1;
 
   output_energy_stat ( -1, &planes[!current], Niterations * Nsources*energy_per_source, Rank, &myCOMM_WORLD );
-  TIME_MPI_CALL(MPI_Barrier(myCOMM_WORLD), comm_time);
+  if (Ntasks > 1){
+  	TIME_MPI_CALL(MPI_Barrier(myCOMM_WORLD), comm_time);
+  }
 
   memory_release(buffers, planes, Rank, verbose);
   // double compute_time = t1 - comm_time;
@@ -287,7 +295,10 @@ int main(int argc, char **argv)
     //printf("AVERAGE COMMUNICATION time in loop:%.6f s\n", avg_comm_time); 
     //printf("AVERAGE COMPUTATION time for loop:%.6f s\n", t1 - avg_comm_time); 
   //} 
-  report_timing_stats(myCOMM_WORLD, Rank, Ntasks, "Main Loop", 0);
+
+  report_timing_stats(myCOMM_WORLD, Rank, Ntasks, (Ntasks == 1) ? "Serial Mode" : "Main Loop", 0);
+
+  // report_timing_stats(myCOMM_WORLD, Rank, Ntasks, "Main Loop", 0);
 
   
   MPI_Finalize();
