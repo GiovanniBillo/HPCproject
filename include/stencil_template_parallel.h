@@ -1012,6 +1012,7 @@ void update_boundaries(plane_t *plane, buffers_t buffers[2],
  * @param height        Height of the local subdomain (including halos).
  * @param neighbours    Array of neighbour ranks (MPI_PROC_NULL if no neighbour).
  */
+
 void pack_halos(const plane_t *plane, buffers_t buffers[2], 
                 int width, int height, const int neighbours[4],
                 int verbose, int rank) {
