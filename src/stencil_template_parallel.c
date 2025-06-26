@@ -124,6 +124,8 @@ int main(int argc, char **argv)
 
       const int register width = planes[current].size[_x_];
       const int register height = planes[current].size[_y_];
+      const int register buffer_width = planes[current].size[_x_] + 2;
+      const int register buffer_height = planes[current].size[_y_] + 2;
       //// const int register  old_frame_size = xsize+2;
 //
       //const int register width_old = planes[current].size[_x_];
@@ -157,10 +159,10 @@ int main(int argc, char **argv)
 		   ((double*)buffers[SEND][EAST])[1],
 		   ((double*)buffers[SEND][EAST])[2]);
 		}
-	    MPI_Send(buffers[SEND][EAST], old_frame_size, MPI_BYTE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD);
+	    MPI_Send(buffers[SEND][EAST], buffer_height, MPI_BYTE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD);
 	}
 	if (neighbours[WEST] != MPI_PROC_NULL) {
-	    MPI_Recv(buffers[RECV][WEST], new_frame_size, MPI_BYTE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	    MPI_Recv(buffers[RECV][WEST], buffer_height, MPI_BYTE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 		if (verbose > 0){
 		    printf("Rank %d: Received EAST  from %d. First 3 values: %f, %f, %f\n", 
 		   Rank, neighbours[EAST],
@@ -179,10 +181,10 @@ int main(int argc, char **argv)
 		   ((double*)buffers[SEND][WEST])[1],
 		   ((double*)buffers[SEND][WEST])[2]);
 		}
-    MPI_Send(buffers[SEND][WEST], old_frame_size, MPI_BYTE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD);
+    MPI_Send(buffers[SEND][WEST], buffer_height, MPI_BYTE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD);
 	}
 	if (neighbours[EAST] != MPI_PROC_NULL) {
-	    MPI_Recv(buffers[RECV][EAST], new_frame_size, MPI_BYTE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	    MPI_Recv(buffers[RECV][EAST], buffer_height, MPI_BYTE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 		if (verbose > 0){
 		    printf("Rank %d: Received WEST  from %d. First 3 values: %f, %f, %f\n", 
 		   Rank, neighbours[WEST],
@@ -203,10 +205,10 @@ int main(int argc, char **argv)
 		   ((double*)buffers[SEND][NORTH])[2]);
 		}
 
-	    MPI_Send(buffers[SEND][NORTH], old_frame_size, MPI_BYTE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD);
+	    MPI_Send(buffers[SEND][NORTH], buffer_height, MPI_BYTE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD);
 	}
 	if (neighbours[SOUTH] != MPI_PROC_NULL) {
-	    MPI_Recv(buffers[RECV][SOUTH], new_frame_size, MPI_BYTE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	    MPI_Recv(buffers[RECV][SOUTH], buffer_width, MPI_BYTE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 		if (verbose > 0){
 		    printf("Rank %d: Received NORTH  from %d. First 3 values: %f, %f, %f\n", 
 		   Rank, neighbours[NORTH],
@@ -226,10 +228,10 @@ int main(int argc, char **argv)
 		   ((double*)buffers[SEND][SOUTH])[2]);
 		}
 
-	    MPI_Send(buffers[SEND][SOUTH], old_frame_size, MPI_BYTE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD);
+	    MPI_Send(buffers[SEND][SOUTH], buffer_width, MPI_BYTE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD);
 	}
 	if (neighbours[NORTH] != MPI_PROC_NULL) {
-	    MPI_Recv(buffers[RECV][NORTH], new_frame_size, MPI_BYTE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	    MPI_Recv(buffers[RECV][NORTH], buffer_width, MPI_BYTE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 		if (verbose > 0){
 		    printf("Rank %d: Received SOUTH  from %d. First 3 values: %f, %f, %f\n", 
 		   Rank, neighbours[SOUTH],
