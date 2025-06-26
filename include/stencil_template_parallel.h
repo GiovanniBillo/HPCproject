@@ -503,7 +503,6 @@ inline int memory_release(buffers_t *buffers, plane_t *planes, int Rank, int ver
     }
     return 0;
 	}
-}
 
 extern int initialize_sources( int       ,
 			int       ,
@@ -952,7 +951,7 @@ void update_boundaries(plane_t *plane, buffers_t buffers[2],
         for (int j = 1; j < height - 1; j++) {
             if (verbose > 0) {
                 printf("  y=%d: old=%f, new=%f\n", 
-                       j, plane->data[j * width], buffers[RECV][EAST][j - 1]);
+                       j, plane->data[j * (width - 1)], buffers[RECV][EAST][j - 1]);
             }
             plane->data[j * width] = buffers[RECV][EAST][j - 1];
         }
@@ -966,7 +965,7 @@ void update_boundaries(plane_t *plane, buffers_t buffers[2],
         for (int j = 1; j < height - 1; j++) {
             if (verbose > 0) {
                 printf("  y=%d: old=%f, new=%f\n", 
-                       j, plane->data[(j + 1) * width - 1], buffers[RECV][WEST][j - 1]);
+                       j, plane->data[(j + 1)], buffers[RECV][WEST][j - 1]);
             }
             plane->data[(j + 1) * width - 1] = buffers[RECV][WEST][j - 1];
         }
@@ -1027,9 +1026,9 @@ void pack_halos(const plane_t *plane, buffers_t buffers[2],
     	fflush(stdout);
         }
         for (int j = 1; j < height - 1; j++) {
-            buffers[SEND][EAST][j - 1] = plane->data[j * width + 1];
+            buffers[SEND][EAST][j - 1] = plane->data[(j + 1) * width - 2];
             if (verbose > 0) {
-                printf("  y=%d: %f\n", j, plane->data[j * width + 1]);
+                printf("  y=%d: %f\n", j, plane->data[(j + 1) * width - 2]);
     		fflush(stdout);
             }
         }
@@ -1042,9 +1041,9 @@ void pack_halos(const plane_t *plane, buffers_t buffers[2],
     	fflush(stdout);
         }
         for (int j = 1; j < height - 1; j++) {
-            buffers[SEND][WEST][j - 1] = plane->data[(j + 1) * width - 2];
+            buffers[SEND][WEST][j - 1] = plane->data[j*width + 1];
             if (verbose> 0) {
-                printf("  y=%d: %f\n", j, plane->data[(j + 1) * width - 2]);
+                printf("  y=%d: %f\n", j, plane->data[j*width + 1]);
     		fflush(stdout);
             }
         }
