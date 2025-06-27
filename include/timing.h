@@ -14,7 +14,11 @@ extern double loop_start_time;
 extern double loop_end_time;
 
 #define MAX_THREADS 128  // Tune to your max expected thread count
-extern double thread_times[MAX_THREADS]; // Thread-local timings
+
+#define NUM_TIMED_FUNCS 2  // 0 = get_total_energy, 1 = update_plane
+
+extern double thread_times[NUM_TIMED_FUNCS][MAX_THREADS]; // Thread-local timings
+
 
 // ---- Macros ---- //
 #define TIME_MPI_CALL(call, time_var)      \
@@ -77,43 +81,89 @@ static inline void report_timing_stats(MPI_Comm comm, int Rank, int Ntasks, cons
         printf("Max COMP time: %.6f s | Min COMP time: %.6f s | Avg: %.6f s\n", max_comp_time, min_comp_time, avg_comp_time);
         printf("COMP imbalance ratio: %.2f%%\n", imbalance_ratio * 100);
     }
-
-    // Thread-level timing summary (optional: only print if > 1 thread)
     int num_threads = omp_get_max_threads();
-    if (num_threads > 1 && Rank == 0) {
-        printf("--- Thread-level imbalance (per rank) ---\n");
-    }
 
-    double max_thread_time = 0.0, min_thread_time = 1e9;
-    for (int i = 0; i < num_threads; ++i) {
-        if (thread_times[i] > max_thread_time) max_thread_time = thread_times[i];
-        if (thread_times[i] < min_thread_time) min_thread_time = thread_times[i];
-    }
+	if (num_threads > 1 && Rank == 0) {
+		printf("--- Thread-level imbalance (per rank) ---\n");
 
-    if (num_threads > 1) {
-        printf("Rank %d thread imbalance: max %.6f s, min %.6f s, ratio %.2f%%\n",
-               Rank, max_thread_time, min_thread_time,
-               100 * (max_thread_time - min_thread_time) / max_thread_time);
-    }
+		for (int func_id = 0; func_id < NUM_TIMED_FUNCS; ++func_id) {
+		    double max_time = 0.0, min_time = 1e9;
+		    for (int t = 0; t < num_threads; ++t) {
+			double tval = thread_times[func_id][t];
+			if (tval > max_time) max_time = tval;
+			if (tval < min_time) min_time = tval;
+		    }
 
-    // Optional per-rank logging
+		    printf("Func %d | Max: %.6f s, Min: %.6f s, Ratio: %.2f%%\n",
+			   func_id, max_time, min_time,
+			   100.0 * (max_time - min_time) / (max_time > 0.0 ? max_time : 1.0));
+		}
+	    }
+
+    // Optional per-rank log file
     if (log_per_rank) {
         char fname[64];
         snprintf(fname, sizeof(fname), "timing_rank_%d.log", Rank);
         FILE *f = fopen(fname, "w");
         if (f) {
             fprintf(f, "RANK %d\n", Rank);
+            fprintf(f, "Label: %s\n", label);
             fprintf(f, "Total time: %.6f s\n", total_time);
-            fprintf(f, "Comm time: %.6f s\n", comm_time);
-            fprintf(f, "Comp time: %.6f s\n", compute_time);
-            fprintf(f, "Mem usage: %.2f MB\n", mem_MB);
-            for (int i = 0; i < num_threads; i++) {
-                fprintf(f, "Thread %d: %.6f s\n", i, thread_times[i]);
+            fprintf(f, "Comm time:  %.6f s\n", comm_time);
+            fprintf(f, "Comp time:  %.6f s\n", compute_time);
+            fprintf(f, "Mem usage:  %.2f MB\n", mem_MB);
+            fprintf(f, "Threads:    %d\n\n", num_threads);
+
+            for (int func_id = 0; func_id < NUM_TIMED_FUNCS; ++func_id) {
+                fprintf(f, "Thread timings for function %d:\n", func_id);
+                for (int t = 0; t < num_threads; ++t) {
+                    fprintf(f, "  Thread %2d: %.6f s\n", t, thread_times[func_id][t]);
+                }
+                fprintf(f, "\n");
             }
+
             fclose(f);
+        } else {
+            fprintf(stderr, "Rank %d: Failed to open %s for writing.\n", Rank, fname);
         }
     }
 }
+    // // Thread-level timing summary (optional: only print if > 1 thread)
+    // int num_threads = omp_get_max_threads();
+    // printf("Number of threads detected: %d \n", num_threads);
+    // if (num_threads > 1 && Rank == 0) {
+    //     printf("--- Thread-level imbalance (per rank) ---\n");
+    // }
+
+    // double max_thread_time = 0.0, min_thread_time = 1e9;
+    // for (int i = 0; i < num_threads; ++i) {
+    //     if (thread_times[i] > max_thread_time) max_thread_time = thread_times[i];
+    //     if (thread_times[i] < min_thread_time) min_thread_time = thread_times[i];
+    // }
+
+    // if (num_threads > 1) {
+    //     printf("Rank %d thread imbalance: max %.6f s, min %.6f s, ratio %.2f%%\n",
+    //            Rank, max_thread_time, min_thread_time,
+    //            100 * (max_thread_time - min_thread_time) / max_thread_time);
+    // }
+
+    // // Optional per-rank logging
+    // if (log_per_rank) {
+    //     char fname[64];
+    //     snprintf(fname, sizeof(fname), "timing_rank_%d.log", Rank);
+    //     FILE *f = fopen(fname, "w");
+    //     if (f) {
+    //         fprintf(f, "RANK %d\n", Rank);
+    //         fprintf(f, "Total time: %.6f s\n", total_time);
+    //         fprintf(f, "Comm time: %.6f s\n", comm_time);
+    //         fprintf(f, "Comp time: %.6f s\n", compute_time);
+    //         fprintf(f, "Mem usage: %.2f MB\n", mem_MB);
+    //         for (int i = 0; i < num_threads; i++) {
+    //             fprintf(f, "Thread %d: %.6f s\n", i, thread_times[i]);
+    //         }
+    //         fclose(f);
+    //     }
+    //}
 
 #endif // TIMING_H
 

@@ -32,6 +32,7 @@
 #define _y_ 1
 
 
+#define HALO_TAG 42
 typedef unsigned int uint;
 
 typedef uint    vec2_t[2];
@@ -194,155 +195,250 @@ inline int inject_energy ( const int      periodic,
 
 
 
-
-inline int update_plane ( const int      periodic, 
-                          const vec2_t   N,         // the grid of MPI tasks
-                          const plane_t *oldplane,
-                                plane_t *newplane
-                          )
-    
+inline int update_plane(const int periodic, const vec2_t N, const plane_t *oldplane, plane_t *newplane)
 {
-    uint register fxsize = oldplane->size[_x_]+2;
-    uint register fysize = oldplane->size[_y_]+2;
-    
-    uint register xsize = oldplane->size[_x_];
-    uint register ysize = oldplane->size[_y_];
-    
-   #define IDX( i, j ) ( (j)*fxsize + (i) )
-    
-    // HINT: you may attempt to
-    //       (i)  manually unroll the loop
-    //       (ii) ask the compiler to do it
-    // for instance
-    // #pragma GCC unroll 4
-    //
-    // HINT: in any case, this loop is a good candidate
-    //       for openmp parallelization
+    uint fxsize = oldplane->size[_x_] + 2;
+    uint fysize = oldplane->size[_y_] + 2;
+    uint xsize = oldplane->size[_x_];
+    uint ysize = oldplane->size[_y_];
+
+    #define IDX(i, j) ((j) * fxsize + (i))
 
     double * restrict old = oldplane->data;
     double * restrict new = newplane->data;
 
     double full_result = 0.0;
-   
-    #pragma omp parallel for reduction(+:full_result) schedule(static) 
-    for (uint j = 1; j <= ysize; j++)
-        #pragma GCC unroll 4
-        for ( uint i = 1; i <= xsize; i++){
-                
-                // NOTE: (i-1,j), (i+1,j), (i,j-1) and (i,j+1) always exist even
-                //       if this patch is at some border without periodic conditions;
-                //       in that case it is assumed that the +-1 points are outside the
-                //       plate and always have a value of 0, i.e. they are an
-                //       "infinite sink" of heat
-                
-                // five-points stencil formula
-                //
-                // HINT : check the serial version for some optimization
-                //
-                
-                // new[ IDX(i,j) ] =
-                //     old[ IDX(i,j) ] / 2.0 + ( old[IDX(i-1, j)] + old[IDX(i+1, j)] +
-                //                               old[IDX(i, j-1)] + old[IDX(i, j+1)] ) /4.0 / 2.0;
+
+    #pragma omp parallel
+    {
+        int tid = omp_get_thread_num();
+        double t_start = omp_get_wtime();
+
+        double private_sum = 0.0;
+
+        #pragma omp for schedule(static) nowait
+        for (uint j = 1; j <= ysize; j++) {
+            for (uint i = 1; i <= xsize; i++) {
                 double alpha = 0.6;
-                double result = old[ IDX(i,j) ] *alpha;
-                double sum_i  = (old[IDX(i-1, j)] + old[IDX(i+1, j)]) / 4.0 * (1-alpha);
-                double sum_j  = (old[IDX(i, j-1)] + old[IDX(i, j+1)]) / 4.0 * (1-alpha);
-
-                result += (sum_i + sum_j );
-                new[ IDX(i,j) ] = result;
-
-                full_result += result;
+                double result = old[IDX(i,j)] * alpha;
+                double sum_i = (old[IDX(i-1, j)] + old[IDX(i+1, j)]) / 4.0 * (1 - alpha);
+                double sum_j = (old[IDX(i, j-1)] + old[IDX(i, j+1)]) / 4.0 * (1 - alpha);
+                result += (sum_i + sum_j);
+                new[IDX(i,j)] = result;
+                private_sum += result;
             }
-
-    if ( periodic )
-        {
-            if ( N[_x_] == 1 )
-                {
-                    // propagate the boundaries as needed
-                    // check the serial version
-                for ( int i = 1; i <= xsize; i++ )
-                    {
-                        new[ i ] = new[ IDX(i, ysize) ];
-                        new[ IDX(i, ysize+1) ] = new[ i ];
-                    }
-                }
-  
-            if ( N[_y_] == 1 ) 
-                {
-                   // // propagate the boundaries as needed
-                    // check the serial version
-                for ( int j = 1; j <= ysize; j++ )
-                    {
-                        new[ IDX( 0, j) ] = new[ IDX(xsize, j) ];
-                        new[ IDX( xsize+1, j) ] = new[ IDX(1, j) ];
-                    }
-                }
         }
 
-    
- #undef IDX
-  return 0;
-}
+        #pragma omp atomic
+        full_result += private_sum;
 
+        double t_end = omp_get_wtime();
+        thread_times[1][tid] += (t_end - t_start);
+    }
 
-
-inline int get_total_energy( plane_t *plane,
-                             double  *energy )
-/*
- * NOTE: this routine a good candiadate for openmp
- *       parallelization
- */
-{
-
-    const int register xsize = plane->size[_x_];
-    const int register ysize = plane->size[_y_];
-    const int register fsize = xsize+2;
-
-    double * restrict data = plane->data;
-    
-   #define IDX( i, j ) ( (j)*fsize + (i) )
-
-   #if defined(LONG_ACCURACY)    
-    long double totenergy = 0;
-    #pragma omp parallel for reduction(+:totenergy) schedule(static)
-    for (int j = 1; j <= ysize; j++) {
-        int tid = omp_get_thread_num();
-        // printf("Inside get_total_energy:Thread %d processing row %d\n", tid, j);
-        #pragma GCC unroll 4
-        for (int i = 1; i <= xsize; i++) {
-            totenergy += data[IDX(i, j)];
+    if (periodic) {
+        if (N[_x_] == 1) {
+            for (int i = 1; i <= xsize; i++) {
+                new[i] = new[IDX(i, ysize)];
+                new[IDX(i, ysize+1)] = new[i];
+            }
+        }
+        if (N[_y_] == 1) {
+            for (int j = 1; j <= ysize; j++) {
+                new[IDX(0, j)] = new[IDX(xsize, j)];
+                new[IDX(xsize+1, j)] = new[IDX(1, j)];
+            }
         }
     }
-    *energy = (double)totenergy;
-   #else
-    double totenergy = 0;    
-    #pragma omp parallel for reduction(+:totenergy) schedule(static)
-    for (int j = 1; j <= ysize; j++) {
-        int tid = omp_get_thread_num();
-        // printf("Inside get_total_energy:Thread %d processing row %d\n", tid, j);
-        #pragma GCC unroll 4
-        for (int i = 1; i <= xsize; i++) {
-            totenergy += data[IDX(i, j)];
-        }
-    }
-    *energy = totenergy;
-   #endif
 
-    // HINT: you may attempt to
-    //       (i)  manually unroll the loop
-    //       (ii) ask the compiler to do it
-    // for instance
-    // #pragma GCC unroll 4
-    // for ( int j = 1; j <= ysize; j++ )
-    //     for ( int i = 1; i <= xsize; i++ )
-    //         totenergy += data[ IDX(i, j) ];
-
-    
-   #undef IDX
-
-    *energy = (double)totenergy;
     return 0;
+    #undef IDX
 }
+
+// inline int update_plane ( const int      periodic, 
+//                           const vec2_t   N,         // the grid of MPI tasks
+//                           const plane_t *oldplane,
+//                                 plane_t *newplane
+//                           )
+    
+// {
+//     uint register fxsize = oldplane->size[_x_]+2;
+//     uint register fysize = oldplane->size[_y_]+2;
+    
+//     uint register xsize = oldplane->size[_x_];
+//     uint register ysize = oldplane->size[_y_];
+    
+//    #define IDX( i, j ) ( (j)*fxsize + (i) )
+    
+//     // HINT: you may attempt to
+//     //       (i)  manually unroll the loop
+//     //       (ii) ask the compiler to do it
+//     // for instance
+//     // #pragma GCC unroll 4
+//     //
+//     // HINT: in any case, this loop is a good candidate
+//     //       for openmp parallelization
+
+//     double * restrict old = oldplane->data;
+//     double * restrict new = newplane->data;
+
+//     double full_result = 0.0;
+   
+//     #pragma omp parallel for reduction(+:full_result) schedule(static) 
+//     for (uint j = 1; j <= ysize; j++)
+//         #pragma GCC unroll 4
+//         for ( uint i = 1; i <= xsize; i++){
+                
+//                 // NOTE: (i-1,j), (i+1,j), (i,j-1) and (i,j+1) always exist even
+//                 //       if this patch is at some border without periodic conditions;
+//                 //       in that case it is assumed that the +-1 points are outside the
+//                 //       plate and always have a value of 0, i.e. they are an
+//                 //       "infinite sink" of heat
+                
+//                 // five-points stencil formula
+//                 //
+//                 // HINT : check the serial version for some optimization
+//                 //
+                
+//                 // new[ IDX(i,j) ] =
+//                 //     old[ IDX(i,j) ] / 2.0 + ( old[IDX(i-1, j)] + old[IDX(i+1, j)] +
+//                 //                               old[IDX(i, j-1)] + old[IDX(i, j+1)] ) /4.0 / 2.0;
+//                 double alpha = 0.6;
+//                 double result = old[ IDX(i,j) ] *alpha;
+//                 double sum_i  = (old[IDX(i-1, j)] + old[IDX(i+1, j)]) / 4.0 * (1-alpha);
+//                 double sum_j  = (old[IDX(i, j-1)] + old[IDX(i, j+1)]) / 4.0 * (1-alpha);
+
+//                 result += (sum_i + sum_j );
+//                 new[ IDX(i,j) ] = result;
+
+//                 full_result += result;
+//             }
+
+//     if ( periodic )
+//         {
+//             if ( N[_x_] == 1 )
+//                 {
+//                     // propagate the boundaries as needed
+//                     // check the serial version
+//                 for ( int i = 1; i <= xsize; i++ )
+//                     {
+//                         new[ i ] = new[ IDX(i, ysize) ];
+//                         new[ IDX(i, ysize+1) ] = new[ i ];
+//                     }
+//                 }
+  
+//             if ( N[_y_] == 1 ) 
+//                 {
+//                    // // propagate the boundaries as needed
+//                     // check the serial version
+//                 for ( int j = 1; j <= ysize; j++ )
+//                     {
+//                         new[ IDX( 0, j) ] = new[ IDX(xsize, j) ];
+//                         new[ IDX( xsize+1, j) ] = new[ IDX(1, j) ];
+//                     }
+//                 }
+//         }
+
+    
+//  #undef IDX
+//   return 0;
+// }
+
+
+inline int get_total_energy(plane_t *plane, double *energy)
+{
+    const int xsize = plane->size[_x_];
+    const int ysize = plane->size[_y_];
+    const int fsize = xsize + 2;
+    double * restrict data = plane->data;
+
+    #define IDX(i, j) ((j)*fsize + (i))
+
+    double totenergy = 0;
+
+    #pragma omp parallel
+    {
+        int tid = omp_get_thread_num();
+        double t_start = omp_get_wtime();
+
+        double private_energy = 0.0;
+        #pragma omp for schedule(static) nowait
+        for (int j = 1; j <= ysize; j++) {
+            for (int i = 1; i <= xsize; i++) {
+                private_energy += data[IDX(i, j)];
+            }
+        }
+
+        #pragma omp atomic
+        totenergy += private_energy;
+
+        double t_end = omp_get_wtime();
+        thread_times[0][tid] += (t_end - t_start);
+    }
+
+    *energy = totenergy;
+    return 0;
+
+    #undef IDX
+}
+
+// inline int get_total_energy( plane_t *plane,
+//                              double  *energy )
+// /*
+//  * NOTE: this routine a good candiadate for openmp
+//  *       parallelization
+//  */
+// {
+
+//     const int register xsize = plane->size[_x_];
+//     const int register ysize = plane->size[_y_];
+//     const int register fsize = xsize+2;
+
+//     double * restrict data = plane->data;
+    
+//    #define IDX( i, j ) ( (j)*fsize + (i) )
+
+//    #if defined(LONG_ACCURACY)    
+//     long double totenergy = 0;
+//     #pragma omp parallel for reduction(+:totenergy) schedule(static)
+//     for (int j = 1; j <= ysize; j++) {
+//         int tid = omp_get_thread_num();
+//         // printf("Inside get_total_energy:Thread %d processing row %d\n", tid, j);
+//         #pragma GCC unroll 4
+//         for (int i = 1; i <= xsize; i++) {
+//             totenergy += data[IDX(i, j)];
+//         }
+//     }
+//     *energy = (double)totenergy;
+//    #else
+//     double totenergy = 0;    
+//     #pragma omp parallel for reduction(+:totenergy) schedule(static)
+//     for (int j = 1; j <= ysize; j++) {
+//         int tid = omp_get_thread_num();
+//         // printf("Inside get_total_energy:Thread %d processing row %d\n", tid, j);
+//         #pragma GCC unroll 4
+//         for (int i = 1; i <= xsize; i++) {
+//             totenergy += data[IDX(i, j)];
+//         }
+//     }
+//     *energy = totenergy;
+//    #endif
+
+//     // HINT: you may attempt to
+//     //       (i)  manually unroll the loop
+//     //       (ii) ask the compiler to do it
+//     // for instance
+//     // #pragma GCC unroll 4
+//     // for ( int j = 1; j <= ysize; j++ )
+//     //     for ( int i = 1; i <= xsize; i++ )
+//     //         totenergy += data[ IDX(i, j) ];
+
+    
+//    #undef IDX
+
+//     *energy = (double)totenergy;
+//     return 0;
+// }
 
 
 inline int memory_allocate ( const int       *neighbours  ,
@@ -938,7 +1034,7 @@ if (*verbose > 0){
  * @param height        Height of the local subdomain (including halos).
  * @param neighbours    Array of neighbour ranks (MPI_PROC_NULL if no neighbour).
  */
-void update_boundaries(plane_t *plane, buffers_t buffers[2], 
+void update_halos(plane_t *plane, buffers_t buffers[2], 
                       int width, int height, const int neighbours[4],
                       int verbose, int rank) {
     
@@ -1083,3 +1179,85 @@ void pack_halos(const plane_t *plane, buffers_t buffers[2],
         }
     }
 }
+
+
+void send_halos(buffers_t buffers[2], const int neighbours[4], int buffer_width, int buffer_height, int Rank, int verbose, int non_blocking) {
+    if (non_blocking) {
+        MPI_Request reqs[8];
+        int req_idx = 0;
+
+        // EAST-WEST Comm
+        if (neighbours[EAST] != MPI_PROC_NULL) {
+            if (verbose > 0) {
+                printf("Rank %d: Sending EAST to %d.\n", Rank, neighbours[EAST]);
+            }
+            TIME_MPI_CALL(MPI_Isend(buffers[SEND][EAST], buffer_height, MPI_BYTE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
+        }
+        if (neighbours[WEST] != MPI_PROC_NULL) {
+            TIME_MPI_CALL(MPI_Irecv(buffers[RECV][WEST], buffer_height, MPI_BYTE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
+        }
+
+        if (neighbours[WEST] != MPI_PROC_NULL) {
+            TIME_MPI_CALL(MPI_Isend(buffers[SEND][WEST], buffer_height, MPI_BYTE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
+        }
+        if (neighbours[EAST] != MPI_PROC_NULL) {
+            TIME_MPI_CALL(MPI_Irecv(buffers[RECV][EAST], buffer_height, MPI_BYTE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
+        }
+
+        // NORTH-SOUTH Comm
+        if (neighbours[NORTH] != MPI_PROC_NULL) {
+            if (verbose > 0) {
+                printf("Rank %d: Sending NORTH to %d.\n", Rank, neighbours[NORTH]);
+            }
+            TIME_MPI_CALL(MPI_Isend(buffers[SEND][NORTH], buffer_height, MPI_BYTE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
+        }
+        if (neighbours[SOUTH] != MPI_PROC_NULL) {
+            TIME_MPI_CALL(MPI_Irecv(buffers[RECV][SOUTH], buffer_width, MPI_BYTE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
+        }
+
+        if (neighbours[SOUTH] != MPI_PROC_NULL) {
+            TIME_MPI_CALL(MPI_Isend(buffers[SEND][SOUTH], buffer_width, MPI_BYTE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
+        }
+        if (neighbours[NORTH] != MPI_PROC_NULL) {
+            TIME_MPI_CALL(MPI_Irecv(buffers[RECV][NORTH], buffer_width, MPI_BYTE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
+        }
+
+        MPI_Waitall(req_idx, reqs, MPI_STATUSES_IGNORE);
+    } else {
+        // Blocking mode
+        if (neighbours[EAST] != MPI_PROC_NULL) {
+            if (verbose > 0) {
+                printf("Rank %d: Sending EAST to %d.\n", Rank, neighbours[EAST]);
+            }
+            TIME_MPI_CALL(MPI_Send(buffers[SEND][EAST], buffer_height, MPI_BYTE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD), comm_time);
+        }
+        if (neighbours[WEST] != MPI_PROC_NULL) {
+            TIME_MPI_CALL(MPI_Recv(buffers[RECV][WEST], buffer_height, MPI_BYTE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE), comm_time);
+        }
+
+        if (neighbours[WEST] != MPI_PROC_NULL) {
+            TIME_MPI_CALL(MPI_Send(buffers[SEND][WEST], buffer_height, MPI_BYTE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD), comm_time);
+        }
+        if (neighbours[EAST] != MPI_PROC_NULL) {
+            TIME_MPI_CALL(MPI_Recv(buffers[RECV][EAST], buffer_height, MPI_BYTE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE), comm_time);
+        }
+
+        if (neighbours[NORTH] != MPI_PROC_NULL) {
+            if (verbose > 0) {
+                printf("Rank %d: Sending NORTH to %d.\n", Rank, neighbours[NORTH]);
+            }
+            TIME_MPI_CALL(MPI_Send(buffers[SEND][NORTH], buffer_height, MPI_BYTE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD), comm_time);
+        }
+        if (neighbours[SOUTH] != MPI_PROC_NULL) {
+            TIME_MPI_CALL(MPI_Recv(buffers[RECV][SOUTH], buffer_width, MPI_BYTE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE), comm_time);
+        }
+
+        if (neighbours[SOUTH] != MPI_PROC_NULL) {
+            TIME_MPI_CALL(MPI_Send(buffers[SEND][SOUTH], buffer_width, MPI_BYTE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD), comm_time);
+        }
+        if (neighbours[NORTH] != MPI_PROC_NULL) {
+            TIME_MPI_CALL(MPI_Recv(buffers[RECV][NORTH], buffer_width, MPI_BYTE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE), comm_time);
+        }
+    }
+}
+
