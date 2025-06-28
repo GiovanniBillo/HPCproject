@@ -53,7 +53,8 @@ $(SRC_DIR)/%.o: $(SRC_DIR)/%.c
 
 # Clean
 clean:
-	rm -f $(SRC_DIR)/*.o $(EXEC_SERIAL) $(EXEC_SERIAL_FR) $(EXEC_PARALLEL) *.txt *.bin
+	rm -f $(SRC_DIR)/*.o $(EXEC_SERIAL) $(EXEC_SERIAL_FR) $(EXEC_PARALLEL) *.txt *.bin *.csv
+
 
 .PHONY: all clean openmp
 

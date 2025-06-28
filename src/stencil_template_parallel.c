@@ -14,7 +14,7 @@
 // global time counters
 double comm_time = 0.0, comp_time = 0.0;
 double loop_start_time = 0.0, loop_end_time = 0.0;
-double thread_times[NUM_TIMED_FUNCS][MAX_THREADS] = {0.0};
+double thread_times[NUM_TIMED_FUNCS][MAX_THREADS] = {1.0};
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
 
@@ -110,8 +110,6 @@ int main(int argc, char **argv)
   for (int iter = 0; iter < Niterations; ++iter)
     {
       
-      MPI_Request reqs[8];
-      
       /* new energy from sources */
       int inj_ret = inject_energy( periodic, Nsources_local, Sources_local, energy_per_source, N, &planes[current], verbose);
       if (inj_ret != 0) {
@@ -137,8 +135,10 @@ int main(int argc, char **argv)
       pack_halos(&planes[current], buffers, width, height, neighbours, verbose, Rank);
 	
       /* // [B] perform the halo communications */
-    send_halos(buffers, neighbours, buffer_width, buffer_height, Rank, verbose, 1);      
+
+      send_halos(buffers, neighbours, buffer_width, buffer_height, Rank, verbose, 1);      
       // [C] copy the haloes data
+
       update_halos(&planes[current], buffers, width, height, neighbours, verbose, Rank);
 
       /* --------------------------------------  */

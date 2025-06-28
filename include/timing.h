@@ -128,69 +128,6 @@ static inline void report_timing_stats(MPI_Comm comm, int Rank, int Ntasks, cons
         }
     }
 }
-    // // Thread-level timing summary (optional: only print if > 1 thread)
-    // int num_threads = omp_get_max_threads();
-    // printf("Number of threads detected: %d \n", num_threads);
-    // if (num_threads > 1 && Rank == 0) {
-    //     printf("--- Thread-level imbalance (per rank) ---\n");
-    // }
-
-    // double max_thread_time = 0.0, min_thread_time = 1e9;
-    // for (int i = 0; i < num_threads; ++i) {
-    //     if (thread_times[i] > max_thread_time) max_thread_time = thread_times[i];
-    //     if (thread_times[i] < min_thread_time) min_thread_time = thread_times[i];
-    // }
-
-    // if (num_threads > 1) {
-    //     printf("Rank %d thread imbalance: max %.6f s, min %.6f s, ratio %.2f%%\n",
-    //            Rank, max_thread_time, min_thread_time,
-    //            100 * (max_thread_time - min_thread_time) / max_thread_time);
-    // }
-
-    // // Optional per-rank logging
-    // if (log_per_rank) {
-    //     char fname[64];
-    //     snprintf(fname, sizeof(fname), "timing_rank_%d.log", Rank);
-    //     FILE *f = fopen(fname, "w");
-    //     if (f) {
-    //         fprintf(f, "RANK %d\n", Rank);
-    //         fprintf(f, "Total time: %.6f s\n", total_time);
-    //         fprintf(f, "Comm time: %.6f s\n", comm_time);
-    //         fprintf(f, "Comp time: %.6f s\n", compute_time);
-    //         fprintf(f, "Mem usage: %.2f MB\n", mem_MB);
-    //         for (int i = 0; i < num_threads; i++) {
-    //             fprintf(f, "Thread %d: %.6f s\n", i, thread_times[i]);
-    //         }
-    //         fclose(f);
-    //     }
-    //}
 
 #endif // TIMING_H
 
-//#ifndef TIMING_H
-//#define TIMING_H
-//
-//#include <mpi.h>
-//#include <omp.h>
-//
-//// Global time trackers (defined in main.c)
-//extern double comm_time;
-//extern double comp_time;
-//
-//// Macro to wrap MPI calls and accumulate communication time
-//#define TIME_MPI_CALL(call, time_var)      \
-    //do {                                   \
-        //double t0 = MPI_Wtime();           \
-        //call;                              \
-        //time_var += MPI_Wtime() - t0;      \
-    //} while(0)
-//
-//// Macro to wrap compute sections and accumulate compute time
-//#define TIME_OMP_BLOCK(code_block)                   \
-    //do {                                             \
-        //double _t0 = omp_get_wtime();                \
-        //code_block                                   \
-        //comp_time += omp_get_wtime() - _t0;          \
-    //} while (0)
-//
-//#endif // TIMING_H
