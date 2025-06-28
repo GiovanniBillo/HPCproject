@@ -85,6 +85,12 @@ static inline void report_timing_stats(MPI_Comm comm, int Rank, int Ntasks, cons
 
 	if (num_threads > 1 && Rank == 0) {
 		printf("--- Thread-level imbalance (per rank) ---\n");
+		// Open CSV file for appending thread imbalance results
+		FILE *imbalance_csv = fopen("thread_imbalance.csv", "a");
+		if (!imbalance_csv) {
+			fprintf(stderr, "Rank 0: Failed to open thread_imbalance.csv\n");
+			return;
+		}
 
 		for (int func_id = 0; func_id < NUM_TIMED_FUNCS; ++func_id) {
 		    double max_time = 0.0, min_time = 1e9;
@@ -93,11 +99,14 @@ static inline void report_timing_stats(MPI_Comm comm, int Rank, int Ntasks, cons
 			if (tval > max_time) max_time = tval;
 			if (tval < min_time) min_time = tval;
 		    }
-
+		    double ratio = 100.0 * (max_time - min_time) / (max_time > 0.0 ? max_time : 1.0);
 		    printf("Func %d | Max: %.6f s, Min: %.6f s, Ratio: %.2f%%\n",
 			   func_id, max_time, min_time,
-			   100.0 * (max_time - min_time) / (max_time > 0.0 ? max_time : 1.0));
+			   ratio);
+		// Log to CSV: threads, function_id, imbalance_ratio
+		fprintf(imbalance_csv, "%d,%d,%.6f\n", num_threads, func_id, ratio);
 		}
+		fclose(imbalance_csv);
 	    }
 
     // Optional per-rank log file
