@@ -1,6 +1,11 @@
 #!/bin/bash
-module load openMPI
 set -x 
+if [[ $ENV -eq "LEONARDO" ]]; then
+	echo "Set environment for LEONARDO"
+        module load openmpi/4.1.6--gcc--12.2.0
+elif [[ $ENV -eq "ORFEO" ]]; then
+	echo "Set environment for ORFEO"
+        module load openMPI
 EXEC=./stencil_parallel
 
 X_BASE=10000

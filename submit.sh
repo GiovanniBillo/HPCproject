@@ -3,13 +3,15 @@ module load openMPI
 make clean && make
 # === Load common SLURM options ===
 source common_slurm_options.sh  # defines COMMON_OPTS
-
+ENV=""
 # === Detect cluster and set account/partition ===
 if [[ "$PWD" == "/leonardo/home/userexternal/gbillo00"* ]]; then
   EXTRA_OPTS="--partition=dcgp_usr_prod -A uTS25_Tornator_0"
+  ENV="LEONARDO"
   echo "Detected Leonardo environment"
 elif [[ "$PWD" == "/u/dssc/gbillo/HPCproject"* ]]; then
   EXTRA_OPTS="--partition=EPYC -A dssc"
+  ENV="ORFEO"
   echo "Detected Orfeo environment"
 else
   echo "❌ Unknown system environment (PWD=$PWD)" >&2
@@ -38,7 +40,7 @@ for i in "${!NODE_COUNTS[@]}"; do
     --nodes=$NODES \
     --ntasks-per-node=$BEST_TASKS \
     --cpus-per-task=$BEST_THREADS \
-    --export=BEST_THREADS=$BEST_THREADS,BEST_TASKS=$BEST_TASKS,NODES=$NODES \
+    --export=ENV=$ENV,BEST_THREADS=$BEST_THREADS,BEST_TASKS=$BEST_TASKS,NODES=$NODES \
     --output=log_multinode_${NODES}nodes.out \
     multinode_study.sh
 done
