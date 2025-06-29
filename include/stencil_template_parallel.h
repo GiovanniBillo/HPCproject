@@ -1100,19 +1100,23 @@ void send_halos(buffers_t buffers[2], const int neighbours[4], int buffer_width,
         // EAST-WEST Comm
         if (neighbours[EAST] != MPI_PROC_NULL) {
             if (verbose > 0) {
-                printf("Rank %d: Sending EAST to %d.\n", Rank, neighbours[EAST]);
+                printf("Rank %d: Sending EAST  to %d:elements %d.(bytes: %d) \n", Rank, neighbours[EAST], buffer_height, buffer_height*sizeof(double));
             }
-            TIME_MPI_CALL(MPI_Isend(buffers[SEND][EAST], buffer_height, MPI_BYTE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
+            TIME_MPI_CALL(MPI_Isend(buffers[SEND][EAST], buffer_height, MPI_DOUBLE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
         }
         if (neighbours[WEST] != MPI_PROC_NULL) {
-            TIME_MPI_CALL(MPI_Irecv(buffers[RECV][WEST], buffer_height, MPI_BYTE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
+	    if (verbose > 0) {
+		printf("Rank %d: Receiving from WEST (%d) — expecting %d elements (bytes: %zu)\n",
+		       Rank, neighbours[WEST], buffer_height, buffer_height * sizeof(double));
+	    }
+            TIME_MPI_CALL(MPI_Irecv(buffers[RECV][WEST], buffer_height, MPI_DOUBLE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
         }
 
         if (neighbours[WEST] != MPI_PROC_NULL) {
-            TIME_MPI_CALL(MPI_Isend(buffers[SEND][WEST], buffer_height, MPI_BYTE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
+            TIME_MPI_CALL(MPI_Isend(buffers[SEND][WEST], buffer_height, MPI_DOUBLE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
         }
         if (neighbours[EAST] != MPI_PROC_NULL) {
-            TIME_MPI_CALL(MPI_Irecv(buffers[RECV][EAST], buffer_height, MPI_BYTE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
+            TIME_MPI_CALL(MPI_Irecv(buffers[RECV][EAST], buffer_height, MPI_DOUBLE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
         }
 
         // NORTH-SOUTH Comm
@@ -1120,17 +1124,17 @@ void send_halos(buffers_t buffers[2], const int neighbours[4], int buffer_width,
             if (verbose > 0) {
                 printf("Rank %d: Sending NORTH to %d.\n", Rank, neighbours[NORTH]);
             }
-            TIME_MPI_CALL(MPI_Isend(buffers[SEND][NORTH], buffer_height, MPI_BYTE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
+            TIME_MPI_CALL(MPI_Isend(buffers[SEND][NORTH], buffer_width, MPI_DOUBLE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
         }
         if (neighbours[SOUTH] != MPI_PROC_NULL) {
-            TIME_MPI_CALL(MPI_Irecv(buffers[RECV][SOUTH], buffer_width, MPI_BYTE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
+            TIME_MPI_CALL(MPI_Irecv(buffers[RECV][SOUTH], buffer_width, MPI_DOUBLE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
         }
 
         if (neighbours[SOUTH] != MPI_PROC_NULL) {
-            TIME_MPI_CALL(MPI_Isend(buffers[SEND][SOUTH], buffer_width, MPI_BYTE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
+            TIME_MPI_CALL(MPI_Isend(buffers[SEND][SOUTH], buffer_width, MPI_DOUBLE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
         }
         if (neighbours[NORTH] != MPI_PROC_NULL) {
-            TIME_MPI_CALL(MPI_Irecv(buffers[RECV][NORTH], buffer_width, MPI_BYTE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
+            TIME_MPI_CALL(MPI_Irecv(buffers[RECV][NORTH], buffer_width, MPI_DOUBLE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD, &reqs[req_idx++]), comm_time);
         }
 
         MPI_Waitall(req_idx, reqs, MPI_STATUSES_IGNORE);
@@ -1140,34 +1144,34 @@ void send_halos(buffers_t buffers[2], const int neighbours[4], int buffer_width,
             if (verbose > 0) {
                 printf("Rank %d: Sending EAST to %d.\n", Rank, neighbours[EAST]);
             }
-            TIME_MPI_CALL(MPI_Send(buffers[SEND][EAST], buffer_height, MPI_BYTE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD), comm_time);
+            TIME_MPI_CALL(MPI_Send(buffers[SEND][EAST], buffer_height, MPI_DOUBLE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD), comm_time);
         }
         if (neighbours[WEST] != MPI_PROC_NULL) {
-            TIME_MPI_CALL(MPI_Recv(buffers[RECV][WEST], buffer_height, MPI_BYTE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE), comm_time);
+            TIME_MPI_CALL(MPI_Recv(buffers[RECV][WEST], buffer_height, MPI_DOUBLE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE), comm_time);
         }
 
         if (neighbours[WEST] != MPI_PROC_NULL) {
-            TIME_MPI_CALL(MPI_Send(buffers[SEND][WEST], buffer_height, MPI_BYTE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD), comm_time);
+            TIME_MPI_CALL(MPI_Send(buffers[SEND][WEST], buffer_height, MPI_DOUBLE, neighbours[WEST], HALO_TAG, MPI_COMM_WORLD), comm_time);
         }
         if (neighbours[EAST] != MPI_PROC_NULL) {
-            TIME_MPI_CALL(MPI_Recv(buffers[RECV][EAST], buffer_height, MPI_BYTE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE), comm_time);
+            TIME_MPI_CALL(MPI_Recv(buffers[RECV][EAST], buffer_height, MPI_DOUBLE, neighbours[EAST], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE), comm_time);
         }
 
         if (neighbours[NORTH] != MPI_PROC_NULL) {
             if (verbose > 0) {
                 printf("Rank %d: Sending NORTH to %d.\n", Rank, neighbours[NORTH]);
             }
-            TIME_MPI_CALL(MPI_Send(buffers[SEND][NORTH], buffer_height, MPI_BYTE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD), comm_time);
+            TIME_MPI_CALL(MPI_Send(buffers[SEND][NORTH], buffer_width, MPI_DOUBLE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD), comm_time);
         }
         if (neighbours[SOUTH] != MPI_PROC_NULL) {
-            TIME_MPI_CALL(MPI_Recv(buffers[RECV][SOUTH], buffer_width, MPI_BYTE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE), comm_time);
+            TIME_MPI_CALL(MPI_Recv(buffers[RECV][SOUTH], buffer_width, MPI_DOUBLE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE), comm_time);
         }
 
         if (neighbours[SOUTH] != MPI_PROC_NULL) {
-            TIME_MPI_CALL(MPI_Send(buffers[SEND][SOUTH], buffer_width, MPI_BYTE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD), comm_time);
+            TIME_MPI_CALL(MPI_Send(buffers[SEND][SOUTH], buffer_width, MPI_DOUBLE, neighbours[SOUTH], HALO_TAG, MPI_COMM_WORLD), comm_time);
         }
         if (neighbours[NORTH] != MPI_PROC_NULL) {
-            TIME_MPI_CALL(MPI_Recv(buffers[RECV][NORTH], buffer_width, MPI_BYTE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE), comm_time);
+            TIME_MPI_CALL(MPI_Recv(buffers[RECV][NORTH], buffer_width, MPI_DOUBLE, neighbours[NORTH], HALO_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE), comm_time);
         }
     }
 }
