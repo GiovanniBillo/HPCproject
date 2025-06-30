@@ -1,23 +1,22 @@
 #!/bin/bash
 # === Load common SLURM options ===
 source common_slurm_options.sh  # defines COMMON_OPTS
-ENV=""
-# === Detect cluster and set account/partition ===
-if [[ "$PWD" == "/leonardo/home/userexternal/gbillo00"* ]]; then
-  EXTRA_OPTS="--partition=dcgp_usr_prod -A uTS25_Tornator_0"
-  ENV="LEONARDO"
-  module load gcc/12.2.0
-  module load openmpi/4.1.6--gcc--12.2.0
-  echo "Detected Leonardo environment"
-elif [[ "$PWD" == "/u/dssc/gbillo/HPCproject"* ]]; then
-  EXTRA_OPTS="--partition=EPYC -A dssc"
-  ENV="ORFEO"
-  echo "Detected Orfeo environment"
-  module load openMPI
-else
-  echo "❌ Unknown system environment (PWD=$PWD)" >&2
-  exit 1
-fi
+# # === Detect cluster and set account/partition ===
+# if [[ "$PWD" == "/leonardo/home/userexternal/gbillo00"* ]]; then
+#   EXTRA_OPTS="--partition=dcgp_usr_prod -A uTS25_Tornator_0"
+#   ENV="LEONARDO"
+#   module load gcc/12.2.0
+#   module load openmpi/4.1.6--gcc--12.2.0
+#   echo "Detected Leonardo environment"
+# elif [[ "$PWD" == "/u/dssc/gbillo/HPCproject"* ]]; then
+#   EXTRA_OPTS="--partition=EPYC -A dssc"
+#   ENV="ORFEO"
+#   echo "Detected Orfeo environment"
+#   module load openMPI
+# else
+#   echo "❌ Unknown system environment (PWD=$PWD)" >&2
+#   exit 1
+# fi
 make clean && make
 # === Read best_n_threads and best_n_tasks ===
 if [[ ! -f best_thread_task ]]; then

@@ -56,7 +56,7 @@ clean:
 	rm -f $(SRC_DIR)/*.o $(EXEC_SERIAL) $(EXEC_SERIAL_FR) $(EXEC_PARALLEL) 
 
 allclean:
-	rm -f $(SRC_DIR)/*.o $(EXEC_SERIAL) $(EXEC_SERIAL_FR) $(EXEC_PARALLEL) *.txt *.bin *.csv
+	rm -f $(SRC_DIR)/*.o $(EXEC_SERIAL) $(EXEC_SERIAL_FR) $(EXEC_PARALLEL) *.txt *.bin *.csv *.out
 
 .PHONY: all clean openmp
 
