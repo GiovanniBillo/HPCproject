@@ -1,7 +1,9 @@
 #!/bin/bash
 # === Load common SLURM options ===
 source common_slurm_options.sh  # defines COMMON_OPTS
-make clean && make
+make clean 
+make -j$(nproc) OPENMP_SCHEDULE=1 PURGE_SERIAL=1   # Corresponds to -DOPTION1 -DOPTION2=value
+
 #
 # === Read best_n_threads and best_n_tasks ===
 if [[ ! -f best_thread_task ]]; then

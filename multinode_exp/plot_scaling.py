@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Set style
-plt.style.use('seaborn')
+# plt.style.use('seaborn')
 plt.rcParams['figure.facecolor'] = 'white'
 
 # =============================================
@@ -73,48 +73,104 @@ def plot_strong_scaling(strong_file):
 # =============================================
 # WEAK SCALING PLOT (Time per unit work)
 # =============================================
-def plot_weak_scaling(weak_file):
-    df_weak = pd.read_csv(weak_file)
-    nodes = df_weak["nodes"]
-    problem_size = df_weak["x"]*df_weak["y"]
-    time = df_weak["time"]
+# def plot_weak_scaling(weak_file):
+#     df_weak = pd.read_csv(weak_file)
+#     nodes = df_weak["nodes"]
+#     problem_size = df_weak["problem_size"]
+#     time = df_weak["time"]
+#     relative_time = df_weak["relative_time"]
     
-    # Calculate time per unit work (normalized)
-    time_per_unit = time / problem_size
-    normalized_time = time_per_unit / time_per_unit.iloc[0]  # Normalize to 1-node case
+#     # Calculate time per unit work (normalized)
+#     time_per_unit = time / problem_size
+#     normalized_time = time_per_unit / time_per_unit.iloc[0]  # Normalize to 1-node case
+    
+#     fig, ax = plt.subplots(figsize=(10, 6))
+    
+#     # Bar plot for normalized time per unit work
+#     bars = ax.bar(nodes, normalized_time, color='tab:orange', alpha=0.7, width=0.6)
+    
+#     # Add reference line at 1.0 (ideal weak scaling)
+#     ax.axhline(1.0, color='gray', linestyle='--', linewidth=2, label="Ideal Scaling")
+    
+#     # Add value labels on bars
+#     for bar in bars:
+#         height = bar.get_height()
+#         ax.text(bar.get_x() + bar.get_width()/2., height,
+#                 f'{height:.2f}',
+#                 ha='center', va='bottom', fontsize=10)
+    
+#     # Axis styling
+#     ax.set_xlabel("Number of Nodes", fontsize=12)
+#     ax.set_ylabel("Normalized Time per Unit Work", fontsize=12)
+#     ax.set_xticks(nodes)
+#     ax.grid(True, axis='y', linestyle=':', alpha=0.7)
+    
+#     # Add problem size annotations
+#     for i, (n, size) in enumerate(zip(nodes, problem_size)):
+#         ax.text(n, 0.02, f"{size:,}", ha='center', va='bottom', 
+#                rotation=90, fontsize=8, color='white',
+#                bbox=dict(facecolor='black', alpha=0.5, pad=1))
+    
+#     plt.legend(loc='upper right')
+#     plt.title("Weak Scaling Analysis\n(Constant Time per Unit Work = Good Scaling)", 
+#               fontsize=14, pad=20)
+#     plt.tight_layout()
+#     plt.savefig('weak_scaling.png', dpi=300, bbox_inches='tight')
+#     plt.close()
+
+def plot_weak_metrics(weak_metrics_file):
+    df = pd.read_csv(weak_metrics_file)
+    nodes = df["nodes"]
+    problem_size = df["problem_size"] / 1e6  # Convert to millions for readability
+    relative_time = df["relative_time"]
     
     fig, ax = plt.subplots(figsize=(10, 6))
     
-    # Bar plot for normalized time per unit work
-    bars = ax.bar(nodes, normalized_time, color='tab:orange', alpha=0.7, width=0.6)
+    # Bar plot for relative time
+    bars = ax.bar(nodes, relative_time, 
+                 color=['tab:green' if x <= 1.05 else 'tab:orange' for x in relative_time],
+                 alpha=0.7, width=0.6)
     
-    # Add reference line at 1.0 (ideal weak scaling)
-    ax.axhline(1.0, color='gray', linestyle='--', linewidth=2, label="Ideal Scaling")
+    # Perfect scaling line and ±5% tolerance band
+    ax.axhline(1.0, color='gray', linestyle='--', linewidth=2, label="Perfect Scaling")
+    ax.axhspan(0.95, 1.05, color='green', alpha=0.1, label="±5% Tolerance")
     
-    # Add value labels on bars
+    # Value labels on bars
     for bar in bars:
         height = bar.get_height()
         ax.text(bar.get_x() + bar.get_width()/2., height,
                 f'{height:.2f}',
-                ha='center', va='bottom', fontsize=10)
+                ha='center', va='bottom' if height > 1 else 'top',
+                fontsize=10, bbox=dict(facecolor='white', alpha=0.7, pad=1))
+    
+    # Problem size annotations
+    for n, size in zip(nodes, problem_size):
+        ax.text(n, 0.02, f"{size:.0f}M", ha='center', va='bottom',
+               fontsize=8, color='black',
+               bbox=dict(facecolor='white', alpha=0.7, pad=1))
     
     # Axis styling
     ax.set_xlabel("Number of Nodes", fontsize=12)
-    ax.set_ylabel("Normalized Time per Unit Work", fontsize=12)
+    ax.set_ylabel("Relative Time (Actual/Expected)", fontsize=12)
     ax.set_xticks(nodes)
+    ax.set_ylim(0, max(relative_time)*1.15)
     ax.grid(True, axis='y', linestyle=':', alpha=0.7)
     
-    # Add problem size annotations
-    for i, (n, size) in enumerate(zip(nodes, problem_size)):
-        ax.text(n, 0.02, f"{size:,}", ha='center', va='bottom', 
-               rotation=90, fontsize=8, color='white',
-               bbox=dict(facecolor='black', alpha=0.5, pad=1))
+    # Custom legend
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor='tab:green', alpha=0.7, label='Good Scaling (≤1.05)'),
+        Patch(facecolor='tab:orange', alpha=0.7, label='Suboptimal Scaling (>1.05)'),
+        plt.Line2D([0], [0], color='gray', linestyle='--', label='Perfect Scaling'),
+        Patch(facecolor='green', alpha=0.1, label='±5% Tolerance')
+    ]
+    ax.legend(handles=legend_elements, loc='upper right')
     
-    plt.legend(loc='upper right')
-    plt.title("Weak Scaling Analysis\n(Constant Time per Unit Work = Good Scaling)", 
-              fontsize=14, pad=20)
+    plt.title("Weak Scaling: Relative Time to Solution\n"
+             "(Values close to 1.0 indicate good scaling)", 
+             fontsize=14, pad=20)
     plt.tight_layout()
-    plt.savefig('weak_scaling.png', dpi=300, bbox_inches='tight')
+    plt.savefig('weak_scaling_relative.png', dpi=300, bbox_inches='tight')
     plt.close()
 
 # =============================================
@@ -123,48 +179,6 @@ def plot_weak_scaling(weak_file):
 if __name__ == "__main__":
     # Update these filenames to match your actual data files
     plot_strong_scaling("multinode_results_STRONG.csv")
-    plot_weak_scaling("multinode_results_WEAK.csv")
-# import pandas as pd
-# import matplotlib.pyplot as plt
-# import numpy as np
+    # plot_weak_scaling("multinode_results_WEAK.csv")
+    plot_weak_metrics("weak_metrics.csv")
 
-# def plot_scaling(metrics_file, scaling_type):
-#     df = pd.read_csv(metrics_file)
-#     nodes = df["nodes"]
-#     time = df["time"]
-#     speedup = df["speedup"]
-#     efficiency = df["efficiency"]
-    
-#     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
-#     fig.suptitle(f"{scaling_type} Scaling Analysis", fontsize=16)
-    
-#     # Speedup plot
-#     ax1.plot(nodes, speedup, 'bo-', label="Measured")
-#     ax1.plot(nodes, nodes if scaling_type=="Strong" else np.ones_like(nodes), 
-#              'r--', label="Ideal")
-#     ax1.set_xlabel("Number of Nodes", fontsize=12)
-#     ax1.set_ylabel("Speedup", fontsize=12)
-#     ax1.set_title("Speedup")
-#     ax1.grid(True, linestyle=':')
-#     ax1.legend()
-    
-#     # Efficiency plot
-#     ax2.plot(nodes, efficiency, 'go-')
-#     ax2.axhline(y=1.0, color='r', linestyle='--')
-#     ax2.set_xlabel("Number of Nodes", fontsize=12)
-#     ax2.set_ylabel("Efficiency", fontsize=12)
-#     ax2.set_title("Parallel Efficiency")
-#     ax2.grid(True, linestyle=':')
-    
-#     # Formatting
-#     for ax in [ax1, ax2]:
-#         ax.set_xticks(nodes)
-#         ax.set_xticklabels([f"{int(n)}" for n in nodes])
-    
-#     plt.tight_layout()
-#     plt.savefig(f"{scaling_type.lower()}_scaling.png", dpi=150)
-#     plt.show()
-
-# # Generate plots
-# plot_scaling("strong_metrics.csv", "Strong")
-# plot_scaling("weak_metrics.csv", "Weak")

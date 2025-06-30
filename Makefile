@@ -4,9 +4,15 @@ MPICC = mpicc
 
 # Configuration options (set via make command)
 OPENMP_SCHEDULE ?= static      # [static|dynamic|guided|auto|0-3]
-OMP_CHUNK_SIZE ?= 64           # Default chunk size
 BUILD_TYPE ?= release          # [release|debug|profile]
 ARCH ?= native                 # CPU architecture (native for auto-detection)
+PURGE_SERIAL ?= 0
+
+# option to purge the serial part of the code
+ifeq ($(PURGE_SERIAL), no)
+  PURGE_SERIAL = 0
+else ifeq ($(PURGE_SERIAL), yes)
+  PURGE_SERIAL = 1
 
 # Schedule policy conversion
 ifeq ($(OPENMP_SCHEDULE), static)
@@ -39,8 +45,12 @@ else
 endif
 
 # Add OpenMP schedule control
-CFLAGS += -DOPENMP_SCHEDULE=$(SCHEDULE_FLAG) -DOMP_CHUNK_SIZE=$(OMP_CHUNK_SIZE)
-MPI_FLAGS += -DOPENMP_SCHEDULE=$(SCHEDULE_FLAG) -DOMP_CHUNK_SIZE=$(OMP_CHUNK_SIZE)
+CFLAGS += -DOPENMP_SCHEDULE=$(SCHEDULE_FLAG) 
+MPI_FLAGS += -DOPENMP_SCHEDULE=$(SCHEDULE_FLAG) 
+
+# Add serialization purge
+CFLAGS += -DPURGE_SERIAL=$(PURGE_SERIAL) 
+MPI_FLAGS += -DPURGE_SERIAL=$(PURGE_SERIAL)
 
 # Non-OpenMP builds
 NO_OMP_FLAGS = $(filter-out -fopenmp,$(BASE_FLAGS)) -I./include
@@ -101,7 +111,6 @@ help:
 	@echo ""
 	@echo "OpenMP scheduling:"
 	@echo "  make OPENMP_SCHEDULE=static|dynamic|guided|auto"
-	@echo "  make OMP_CHUNK_SIZE=64   - Set chunk size (default: 64)"
 	@echo ""
 	@echo "Architecture:"
 	@echo "  make ARCH=native         - Optimize for current CPU (default)"
