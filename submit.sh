@@ -29,7 +29,6 @@ echo "✅ Read best config: $BEST_TASKS MPI tasks × $BEST_THREADS threads"
 
 # === Submit job array for multinode scaling ===
 NODE_COUNTS=(1 2 4 8 16)
-
 for i in "${!NODE_COUNTS[@]}"; do
   NODES="${NODE_COUNTS[$i]}"
   # NTASKS=$((NODES*BEST_TASKS))

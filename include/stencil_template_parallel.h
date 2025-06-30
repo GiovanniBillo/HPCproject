@@ -33,6 +33,17 @@
 
 
 #define HALO_TAG 42
+
+// Define schedule types
+#define SCHED_STATIC   0
+#define SCHED_DYNAMIC  1
+#define SCHED_GUIDED   2
+#define SCHED_AUTO     3
+
+// Default to static if not defined via compiler flag
+#ifndef OPENMP_SCHEDULE
+#define OPENMP_SCHEDULE SCHED_STATIC
+#endif
 typedef unsigned int uint;
 
 typedef uint    vec2_t[2];
@@ -216,7 +227,17 @@ inline int update_plane(const int periodic, const vec2_t N, const plane_t *oldpl
 
         double private_sum = 0.0;
 
-        #pragma omp for schedule(static) nowait
+        // Select schedule policy via preprocessor
+        #if OPENMP_SCHEDULE == SCHED_STATIC
+            #pragma omp for schedule(static, OMP_CHUNK_SIZE) nowait
+        #elif OPENMP_SCHEDULE == SCHED_DYNAMIC
+            #pragma omp for schedule(dynamic, OMP_CHUNK_SIZE) nowait
+        #elif OPENMP_SCHEDULE == SCHED_GUIDED
+            #pragma omp for schedule(guided, OMP_CHUNK_SIZE) nowait
+        #else  // AUTO or fallback
+            #pragma omp for schedule(auto) nowait
+        #endif
+        /* #pragma omp for schedule(static) nowait */
         for (uint j = 1; j <= ysize; j++) {
             for (uint i = 1; i <= xsize; i++) {
                 double alpha = 0.6;
@@ -273,7 +294,16 @@ inline int get_total_energy(plane_t *plane, double *energy)
         double t_start = omp_get_wtime();
 
         double private_energy = 0.0;
-        #pragma omp for schedule(static) nowait
+        #if OPENMP_SCHEDULE == SCHED_STATIC
+            #pragma omp for schedule(static, OMP_CHUNK_SIZE) nowait
+        #elif OPENMP_SCHEDULE == SCHED_DYNAMIC
+            #pragma omp for schedule(dynamic, OMP_CHUNK_SIZE) nowait
+        #elif OPENMP_SCHEDULE == SCHED_GUIDED
+            #pragma omp for schedule(guided, OMP_CHUNK_SIZE) nowait
+        #else  // AUTO or fallback
+            #pragma omp for schedule(auto) nowait
+        #endif
+        /* #pragma omp for schedule(static) nowait */
         for (int j = 1; j <= ysize; j++) {
             for (int i = 1; i <= xsize; i++) {
                 private_energy += data[IDX(i, j)];
