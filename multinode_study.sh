@@ -1,13 +1,30 @@
 #!/bin/bash
 set -x
 
+# DIR=/leonardo/home/userexternal/gbillo00/HPCproject/multinode_exp
+# if [ ! -d $DIR]; then
+#   mkdir -p $DIR 
+# fi 
+DIR=$(pwd)/multinode_exp
+if [ ! -d $DIR]; then
+  mkdir -p $DIR 
+fi 
+
+
 # Initialize environment and log file
-LOG_FILE="out_${NODES}nodes.txt"
-ERROR_FILE="err_${NODES}nodes.txt"
-STRONG_TIME_FILE="time_${NODES}_STRONG.txt"
-WEAK_TIME_FILE="time_${NODES}_WEAK.txt"
-STRONG_RESULTS="multinode_results_STRONG.csv"
-WEAK_RESULTS="multinode_results_WEAK.csv"
+LOG_FILE="$DIR/out_${NODES}nodes.txt"
+ERROR_FILE="$DIR/err_${NODES}nodes.txt"
+STRONG_TIME_FILE="$DIR/time_${NODES}_STRONG.txt"
+WEAK_TIME_FILE="$DIR/time_${NODES}_WEAK.txt"
+
+STRONG_RESULTS="$DIR/multinode_results_STRONG.csv"
+WEAK_RESULTS="$DIR/multinode_results_WEAK.csv"
+
+## Label the files that will later be used to compute speedup and efficiency
+if [[$NODES -eq 1]]; then
+	echo "nodes,x,y, time, elapsed_time" > "$STRONG_RESULTS" 
+	echo "nodes,x,y, time, elapsed_time" > "$WEAK_RESULTS" 
+fi
 
 # Clear previous log files
 > "$LOG_FILE"
@@ -95,70 +112,4 @@ echo "Results summary:" >> "$LOG_FILE"
 echo "  - Strong scaling: ${strong_time:-ERROR}s" >> "$LOG_FILE"
 echo "  - Weak scaling: ${weak_time:-ERROR}s" >> "$LOG_FILE"
 echo "=============================================================" >> "$LOG_FILE"
-##!/bin/bash
-#set -x 
-#if [[ $ENV -eq "LEONARDO" ]]; then
-#	echo "Set environment for LEONARDO" >> out_${NODES}nodes.txt 
-#        module load openmpi/4.1.6--gcc--12.2.0
-#elif [[ $ENV -eq "ORFEO" ]]; then
-#	echo "Set environment for ORFEO" >> out_${NODES}nodes.txt 
-#        module load openMPI
-#fi
-#EXEC=./stencil_parallel
 
-#module load openmpi/4.1.6--gcc--12.2.0
-#X_BASE=10000
-#Y_BASE=10000
-
-#x=$(($X_BASE * $NODES))
-#y=$(($Y_BASE * $NODES))
-
-#total_tasks=$(($NODES * $BEST_TASKS))
-
-#export OMP_NUM_THREADS=$BEST_THREADS
-#export OMP_PLACES=cores
-#export OMP_PROC_BIND=close
-
-#echo "Running multinode scaling with $NODES nodes ($total_tasks MPI tasks, $BEST_THREADS threads/task), input size ${x}x${y}" >> out_${NODES}nodes.txt 
-
-#echo "Performing STRONG SCALING..." >> out_${NODES}nodes.txt 
-
-#/usr/bin/time -f "%e" -o time_tmp_${NODES}_STRONG.txt mpirun -np $total_tasks $EXEC -x $x -y $y -o 1 \
-#  >> out_${NODES}nodes.txt 2>> err_${NODES}nodes.txt
-
-## mpirun -np $total_tasks $EXEC -x $x -y $y -o 1 \
-##   >> out_${NODES}nodes.txt 2 >> err_${NODES}nodes.txt
-## srun --ntasks=$total_tasks --ntasks-per-node=$BEST_TASKS \
-##      --cpus-per-task=$BEST_THREADS \
-##      $EXEC -x $x -y $y -o 1 \
-##      >> out_${NODES}nodes.txt 2>> err_${NODES}nodes.txt
-
-#if [[ $? -eq 0 ]]; then
-#  echo "$NODES,$x,$y,$(cat time_tmp.txt)" >> multinode_results_STRONG.csv
-#else
-#  echo "$NODES,$x,$y,ERROR" >> multinode_results_STRONG.csv
-#fi 
-#echo "Finished STRONG SCALING logging"
-#echo "-----------------------------------------------------------------------------"
-#echo "Performing WEAK SCALING..." >> out_${NODES}nodes.txt 
-#x=10000
-#y=10000
-#echo "Set x=$x, y=$y for every node combination." >> out_${NODES}nodes.txt 
-
-#/usr/bin/time -f "%e" -o time_tmp_${NODES}_STRONG.txt mpirun -np $total_tasks $EXEC -x $x -y $y -o 1 \
-#  >> out_${NODES}nodes.txt 2>> err_${NODES}nodes.txt
-
-## mpirun -np $total_tasks $EXEC -x $x -y $y -o 1 \
-##   >> out_${NODES}nodes.txt 2 >> err_${NODES}nodes.txt
-## srun --ntasks=$total_tasks --ntasks-per-node=$BEST_TASKS \
-##      --cpus-per-task=$BEST_THREADS \
-##      $EXEC -x $x -y $y -o 1 \
-##      >> out_${NODES}nodes.txt 2>> err_${NODES}nodes.txt
-
-#if [[ $? -eq 0 ]]; then
-#  echo "$NODES,$x,$y,$(cat time_tmp.txt)" >> multinode_results_STRONG.csv
-#else
-#  echo "$NODES,$x,$y,ERROR" >> multinode_results_STRONG.csv
-#fi 
-
-#echo "Finished WEAK SCALING logging"

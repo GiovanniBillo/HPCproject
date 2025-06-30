@@ -38,6 +38,7 @@ for i in "${!NODE_COUNTS[@]}"; do
   sbatch \
     $COMMON_OPTS \
     $EXTRA_OPTS \
+    --job-name=multinode_study\
     --nodes=$NODES \
     --ntasks-per-node=$BEST_TASKS \
     --cpus-per-task=$BEST_THREADS \
