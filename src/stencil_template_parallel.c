@@ -15,6 +15,7 @@
 double comm_time = 0.0, comp_time = 0.0;
 double loop_start_time = 0.0, loop_end_time = 0.0;
 double thread_times[NUM_TIMED_FUNCS][MAX_THREADS] = {1.0};
+double factorization_time = 0.0;
 // ------------------------------------------------------------------
 // ------------------------------------------------------------------
 
@@ -64,6 +65,7 @@ int main(int argc, char **argv)
 			 neighbours, &Niterations,
 			 &Nsources, &Nsources_local, &Sources_local, &energy_per_source,
 			 &planes[0], &buffers[0], &verbose);
+
   // Validate minimum ranks
   if (verbose > 0){
 	  printf("Hello from rank %d of %d\n", Rank, Ntasks);

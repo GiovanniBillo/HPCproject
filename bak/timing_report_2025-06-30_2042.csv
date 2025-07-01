@@ -1,0 +1,2 @@
+label,threads,total_time,comm_time,avg_comm,avg_comp,max_comp,min_comp,imbalance_percent,factorization_time
+Main Loop,16,152.033288,94.048675,3.358881,148.627637,152.011866,135.024534,11.18,0.000842

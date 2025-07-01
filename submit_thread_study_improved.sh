@@ -3,7 +3,7 @@
 source common_slurm_options.sh  # defines COMMON_OPTS
 
 make clean
-make 
+make -j$(nproc) OPENMP_SCHEDULE=1 PURGE_SERIAL=1   # Corresponds to -DOPTION1 -DOPTION2=value
 
 # Submit the thread scaling study
 echo "Submitting thread scalability study..."

@@ -2,7 +2,7 @@
 # === Load common SLURM options ===
 source common_slurm_options.sh  # defines COMMON_OPTS
 make clean 
-make -j$(nproc) OPENMP_SCHEDULE=1 PURGE_SERIAL=1   # Corresponds to -DOPTION1 -DOPTION2=value
+make -j$(nproc) OPENMP_SCHEDULE=1 PURGE_SERIAL=1   
 
 #
 # === Read best_n_threads and best_n_tasks ===
@@ -16,6 +16,7 @@ echo "✅ Read best config: $BEST_TASKS MPI tasks × $BEST_THREADS threads"
 
 # === Submit job array for multinode scaling ===
 NODE_COUNTS=(1 2 4 8 16)
+# NODE_COUNTS=(2 8 16)
 for i in "${!NODE_COUNTS[@]}"; do
   NODES="${NODE_COUNTS[$i]}"
   # NTASKS=$((NODES*BEST_TASKS))

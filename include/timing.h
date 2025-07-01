@@ -1,5 +1,4 @@
 #ifndef TIMING_H
-#define TIMING_H
 
 #include <mpi.h>
 #include <omp.h>
@@ -12,7 +11,7 @@ extern double comm_time;
 extern double comp_time;
 extern double loop_start_time;
 extern double loop_end_time;
-
+extern double factorization_time;
 #define MAX_THREADS 128  // Tune to your max expected thread count
 
 #define NUM_TIMED_FUNCS 2  // 0 = get_total_energy, 1 = update_plane
@@ -65,22 +64,34 @@ static void log_thread_stats(int num_threads, int Rank, int func_id) {
     // Log to console
     printf("Func %d | Thread stats: Avg=%.6fs Max=%.6fs Min=%.6fs Imbalance=%.2f%%\n",
            func_id, avg_time, max_time, min_time, imbalance_ratio);
+   char datetime_str[32];
+   time_t now = time(NULL);
+   struct tm *t = localtime(&now);
+   strftime(datetime_str, sizeof(datetime_str), "%Y-%m-%d_%H%M", t);
+   //
+   // Parse node count from environment variable
+   int num_nodes = 0;
+   char *env_nodes = getenv("SLURM_NNODES");
+   if (env_nodes != NULL){
+	num_nodes = atoi(env_nodes);
+    }
 
     char filename[64];    // allocate enough space
 
     // Log to CSV (appends if file exists)
-    snprintf(filename, sizeof(filename), "thread_stats_%d.csv", num_threads);
+    	
+    snprintf(filename, sizeof(filename), "thread_stats_%d_%d.csv", num_threads, datetime_str);
 
     FILE *csv = fopen(filename, "a");
     if (csv) {
     // Write header if file is empty
     fseek(csv, 0, SEEK_END);
     if (ftell(csv) == 0) {  // File is empty
-	fprintf(csv, "num_threads,func_id,avg_time,max_time,min_time,imbalance_ratio\n");
+	fprintf(csv, "num_threads, num_nodes,func_id,avg_time,max_time,min_time,imbalance_ratio\n");
      }
      // Write data
-    fprintf(csv, "%d,%d,%.6f,%.6f,%.6f,%.2f\n",
-	    num_threads, func_id, avg_time, max_time, min_time, imbalance_ratio);
+    fprintf(csv, "%d, %d, %d,%.6f,%.6f,%.6f,%.2f\n",
+	    num_threads, num_nodes, func_id, avg_time, max_time, min_time, imbalance_ratio);
     fclose(csv);
     } else {
 	    fprintf(stderr, "Error opening file '%s': %s\n", filename, strerror(errno));
@@ -102,9 +113,14 @@ static void log_thread_stats(int num_threads, int Rank, int func_id) {
 static void log_rank_stats(int Rank, const char* label, double total_time, 
                           double comm_time, double compute_time, double mem_MB,
                           int num_threads) {
+    char datetime_str[32];
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+    strftime(datetime_str, sizeof(datetime_str), "%Y-%m-%d_%H%M", t);
+
     char fname[64];
-    snprintf(fname, sizeof(fname), "timing_rank_%d.log", Rank);
-    
+    snprintf(fname, sizeof(fname), "timing_rank_%d_%s.log", Rank, datetime_str);
+
     FILE *f = fopen(fname, "w");
     if (!f) {
         fprintf(stderr, "Rank %d: Failed to open log file\n", Rank);
@@ -157,15 +173,62 @@ static inline void report_timing_stats(MPI_Comm comm, int Rank, int Ntasks,
     double max_total_time;
     MPI_Reduce(&total_time, &max_total_time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
 
+    double total_factorization_time;
+    MPI_Reduce(&factorization_time, &total_factorization_time, 1, MPI_DOUBLE, MPI_MAX, 0, comm);  
+    int num_threads = omp_get_max_threads();
     if (Rank == 0) {
+	// Generate datetime string for filename
+	char datetime_str[32];
+	time_t now = time(NULL);
+	struct tm *t = localtime(&now);
+	strftime(datetime_str, sizeof(datetime_str), "%Y-%m-%d_%H%M", t);
+
+	char filename[128];
+	snprintf(filename, sizeof(filename), "timing_report_%s.csv", datetime_str);
+        
+
+
+	FILE *csv = fopen(filename, "a");
+	// Parse node count from environment variable
+	int num_nodes = 0;
+	char *env_nodes = getenv("SLURM_NNODES");
+
+	if (env_nodes != NULL){
+		num_nodes = atoi(env_nodes);
+	}
+
+        if (ftell(csv) == 0) {  // File is empty
+		fprintf(csv, "label, num_nodes, threads,total_time,comm_time,avg_comm,avg_comp,max_comp,min_comp,imbalance_percent,tot_factorization_time\n");
+        }
+
+	
+	if (csv) {
+	fprintf(csv,
+	    "%s,%d,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.2f,%.6f\n",
+	    label,
+	    num_nodes,
+	    num_threads,
+	    max_total_time,
+	    global_comm_time,
+	    avg_comm_time,
+	    avg_comp_time,
+	    max_comp_time,
+	    min_comp_time,
+	    imbalance_ratio * 100,
+	    total_factorization_time
+	);
+	fclose(csv);
+	} else {
+	perror("Could not open timing_report.csv for writing");
+	}
         printf("\n=== %s Timing Report ===\n", label);
         printf("Wall clock time (max over ranks): %.6f s\n", max_total_time);
         printf("Total COMM time: %.6f s\n", global_comm_time);
         printf("COMP imbalance: %.2f%%\n", imbalance_ratio * 100);
+	printf("total time spent for factorization with option PURGE_SERIAL=%d: %.6f s\n", total_factorization_time, PURGE_SERIAL);
     }
 
     // Thread stats (only logged by rank 0)
-    int num_threads = omp_get_max_threads();
     for (int func_id = 0; func_id < NUM_TIMED_FUNCS; ++func_id) {
         log_thread_stats(num_threads, Rank, func_id);
     }
@@ -176,96 +239,4 @@ static inline void report_timing_stats(MPI_Comm comm, int Rank, int Ntasks,
                       compute_time, mem_MB, num_threads);
     }
 }
-/* // ---- Timing Reporter ---- // */
-/* static inline void report_timing_stats(MPI_Comm comm, int Rank, int Ntasks, const char* label, int log_per_rank) { */
-/*     double total_time = loop_end_time - loop_start_time; */
-/*     double compute_time = total_time - comm_time; */
-
-/*     // Memory usage */
-/*     struct rusage rusage; */
-/*     getrusage(RUSAGE_SELF, &rusage); */
-/*     double mem_MB = rusage.ru_maxrss / 1024.0; */
-
-/*     // Reductions */
-/*     double global_comm_time, max_comm_time, avg_comm_time; */
-/*     MPI_Reduce(&comm_time, &global_comm_time, 1, MPI_DOUBLE, MPI_SUM, 0, comm); */
-/*     MPI_Reduce(&comm_time, &max_comm_time, 1, MPI_DOUBLE, MPI_MAX, 0, comm); */
-/*     avg_comm_time = global_comm_time / Ntasks; */
-
-/*     double global_comp_time, max_comp_time, min_comp_time; */
-/*     MPI_Reduce(&compute_time, &global_comp_time, 1, MPI_DOUBLE, MPI_SUM, 0, comm); */
-/*     MPI_Reduce(&compute_time, &max_comp_time, 1, MPI_DOUBLE, MPI_MAX, 0, comm); */
-/*     MPI_Reduce(&compute_time, &min_comp_time, 1, MPI_DOUBLE, MPI_MIN, 0, comm); */
-/*     double avg_comp_time = global_comp_time / Ntasks; */
-/*     double imbalance_ratio = (max_comp_time - min_comp_time) / max_comp_time; */
-
-/*     double max_total_time; */
-/*     MPI_Reduce(&total_time, &max_total_time, 1, MPI_DOUBLE, MPI_MAX, 0, comm); */
-
-/*     if (Rank == 0) { */
-/*         printf("\n=== %s Timing Report ===\n", label); */
-/*         printf("Wall clock time (max over ranks): %.6f s\n", max_total_time); */
-/*         printf("Total COMM time (sum): %.6f s\n", global_comm_time); */
-/*         printf("Max COMM time: %.6f s | Avg COMM time: %.6f s\n", max_comm_time, avg_comm_time); */
-/*         printf("Max COMP time: %.6f s | Min COMP time: %.6f s | Avg: %.6f s\n", max_comp_time, min_comp_time, avg_comp_time); */
-/*         printf("COMP imbalance ratio: %.2f%%\n", imbalance_ratio * 100); */
-/*     } */
-/*     int num_threads = omp_get_max_threads(); */
-
-/* 	if (num_threads > 1 && Rank == 0) { */
-/* 		printf("--- Thread-level imbalance (per rank) ---\n"); */
-/* 		// Open CSV file for appending thread imbalance results */
-/* 		FILE *imbalance_csv = fopen("thread_imbalance.csv", "a"); */
-/* 		if (!imbalance_csv) { */
-/* 			fprintf(stderr, "Rank 0: Failed to open thread_imbalance.csv\n"); */
-/* 			return; */
-/* 		} */
-
-/* 		for (int func_id = 0; func_id < NUM_TIMED_FUNCS; ++func_id) { */
-/* 		    double max_time = 0.0, min_time = 1e9; */
-/* 		    for (int t = 0; t < num_threads; ++t) { */
-/* 			double tval = thread_times[func_id][t]; */
-/* 			if (tval > max_time) max_time = tval; */
-/* 			if (tval < min_time) min_time = tval; */
-/* 		    } */
-/* 		    double ratio = 100.0 * (max_time - min_time) / (max_time > 0.0 ? max_time : 1.0); */
-/* 		    printf("Func %d | Max: %.6f s, Min: %.6f s, Ratio: %.2f%%\n", */
-/* 			   func_id, max_time, min_time, */
-/* 			   ratio); */
-/* 		// Log to CSV: threads, function_id, imbalance_ratio */
-/* 		fprintf(imbalance_csv, "%d,%d,%.6f\n", num_threads, func_id, ratio); */
-/* 		} */
-/* 		fclose(imbalance_csv); */
-/* 	    } */
-
-/*     // Optional per-rank log file */
-/*     if (log_per_rank) { */
-/*         char fname[64]; */
-/*         snprintf(fname, sizeof(fname), "timing_rank_%d.log", Rank); */
-/*         FILE *f = fopen(fname, "w"); */
-/*         if (f) { */
-/*             fprintf(f, "RANK %d\n", Rank); */
-/*             fprintf(f, "Label: %s\n", label); */
-/*             fprintf(f, "Total time: %.6f s\n", total_time); */
-/*             fprintf(f, "Comm time:  %.6f s\n", comm_time); */
-/*             fprintf(f, "Comp time:  %.6f s\n", compute_time); */
-/*             fprintf(f, "Mem usage:  %.2f MB\n", mem_MB); */
-/*             fprintf(f, "Threads:    %d\n\n", num_threads); */
-
-/*             for (int func_id = 0; func_id < NUM_TIMED_FUNCS; ++func_id) { */
-/*                 fprintf(f, "Thread timings for function %d:\n", func_id); */
-/*                 for (int t = 0; t < num_threads; ++t) { */
-/*                     fprintf(f, "  Thread %2d: %.6f s\n", t, thread_times[func_id][t]); */
-/*                 } */
-/*                 fprintf(f, "\n"); */
-/*             } */
-
-/*             fclose(f); */
-/*         } else { */
-/*             fprintf(stderr, "Rank %d: Failed to open %s for writing.\n", Rank, fname); */
-/*         } */
-/*     } */
-/* } */
-
-#endif // TIMING_H
-
+#endif

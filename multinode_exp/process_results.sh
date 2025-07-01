@@ -14,7 +14,7 @@ awk -F, '
     efficiency = speedup / $1
     printf("%d,%.2f,%.2f,%.2f\n", $1, $4, speedup, efficiency)
   }
-' multinode_results_STRONG.csv > strong_metrics.csv
+' multinode_results_STRONG_NEW.csv > strong_metrics_NEW.csv
 
 # Alternative processing showing relative time growth
 awk -F, '
@@ -33,7 +33,7 @@ awk -F, '
     relative_time = $4 / expected_time
     printf("%d,%d,%.2f,%.2f,%.2f\n", $1, current_size, $4, expected_time, relative_time)
   }
-' multinode_results_WEAK.csv > weak_metrics.csv
+' multinode_results_WEAK_NEW.csv > weak_metrics_NEW.csv
 # # Process WEAK scaling results (fixed time per node, measure problem size)
 # awk -F, '
 #   BEGIN {

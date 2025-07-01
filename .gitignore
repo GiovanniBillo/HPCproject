@@ -1,0 +1,8 @@
+.vimrc
+hpcenv/
+*.out
+*.o
+multinode_exp/bak
+multinode_exp/1stpart_results
+multinode_exp/new_run
+multinode_exp/RESULTS

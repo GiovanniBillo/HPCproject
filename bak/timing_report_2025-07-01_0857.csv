@@ -1,0 +1,6 @@
+label,threads,total_time,comm_time,avg_comm,avg_comp,max_comp,min_comp,imbalance_percent,factorization_time
+Main Loop,16,5.651967,30.818643,0.275166,5.325994,5.606899,1.917184,65.81,0.000717
+label,threads,total_time,comm_time,avg_comm,avg_comp,max_comp,min_comp,imbalance_percent,factorization_time
+Main Loop,16,7.140114,4.241276,0.075737,7.052982,7.128294,5.465324,23.33,0.000889
+label,threads,total_time,comm_time,avg_comm,avg_comp,max_comp,min_comp,imbalance_percent,factorization_time
+Main Loop,16,27.528698,2.158516,0.154180,27.340161,27.502954,26.489817,3.68,0.000820

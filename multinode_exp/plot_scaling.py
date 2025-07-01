@@ -179,6 +179,5 @@ def plot_weak_metrics(weak_metrics_file):
 if __name__ == "__main__":
     # Update these filenames to match your actual data files
     plot_strong_scaling("multinode_results_STRONG.csv")
-    # plot_weak_scaling("multinode_results_WEAK.csv")
     plot_weak_metrics("weak_metrics.csv")
 

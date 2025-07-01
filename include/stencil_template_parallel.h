@@ -40,6 +40,11 @@
 #define SCHED_GUIDED   2
 #define SCHED_AUTO     3
 
+// Default to normal version of factorization 
+#ifndef PURGE_SERIAL
+#define PURGE_SERIAL 0
+#endif
+
 // Default to static if not defined via compiler flag
 #ifndef OPENMP_SCHEDULE
 #define OPENMP_SCHEDULE SCHED_STATIC
@@ -76,47 +81,209 @@ extern int get_total_energy( plane_t *, double  * );
    =                                                                        =
    =   initialization                                                       =
    ========================================================================== */
-extern uint simple_factorization( uint, int *, uint ** );
+#if PURGE_SERIAL  // ➜ Use PARALLEL implementation
+uint simple_factorization(uint A, int *Nfactors, uint **factors) {
+    int max_threads = omp_get_max_threads();
+    uint **local_factors = malloc(max_threads * sizeof(uint *));
+    int *local_counts = calloc(max_threads, sizeof(int));
+    int *local_capacities = malloc(max_threads * sizeof(int));
 
-inline uint simple_factorization( uint A, int *Nfactors, uint **factors )
+    for (int i = 0; i < max_threads; ++i) {
+        local_capacities[i] = 16;
+        local_factors[i] = malloc(local_capacities[i] * sizeof(uint));
+    }
+
+    #pragma omp parallel
+    {
+        int tid = omp_get_thread_num();
+        int local_count = 0;
+        uint local_A = A;
+
+        #if OPENMP_SCHEDULE == SCHED_STATIC
+            #pragma omp for schedule(static, OMP_CHUNK_SIZE) nowait
+        #elif OPENMP_SCHEDULE == SCHED_DYNAMIC
+            #pragma omp for schedule(dynamic, OMP_CHUNK_SIZE) nowait
+        #elif OPENMP_SCHEDULE == SCHED_GUIDED
+            #pragma omp for schedule(guided, OMP_CHUNK_SIZE) nowait
+        #else
+            #pragma omp for schedule(auto) nowait
+        #endif
+        for (int f = 2; f <= A / 2; ++f) {
+            while (local_A % f == 0) {
+                if (local_count >= local_capacities[tid]) {
+                    local_capacities[tid] *= 2;
+                    local_factors[tid] = realloc(local_factors[tid], local_capacities[tid] * sizeof(uint));
+                    if (!local_factors[tid]) {
+                        fprintf(stderr, "Error: realloc failed\n");
+                        exit(EXIT_FAILURE);
+                    }
+                }
+                local_factors[tid][local_count++] = f;
+                local_A /= f;
+            }
+        }
+
+        local_counts[tid] = local_count;
+    }
+
+    int total_count = 0;
+    for (int i = 0; i < max_threads; ++i)
+        total_count += local_counts[i];
+
+    uint *final_factors = malloc(total_count * sizeof(uint));
+    int offset = 0;
+    for (int i = 0; i < max_threads; ++i) {
+        for (int j = 0; j < local_counts[i]; ++j)
+            final_factors[offset++] = local_factors[i][j];
+        free(local_factors[i]);
+    }
+
+    free(local_factors);
+    free(local_counts);
+    free(local_capacities);
+
+    *Nfactors = total_count;
+    *factors = final_factors;
+    return 0;
+}
+
+#else  // ➜ Use SERIAL implementation
+
+uint simple_factorization(uint A, int *Nfactors, uint **factors)
 /*
- * rought factorization;
- * assumes that A is small, of the order of <~ 10^5 max,
- * since it represents the number of tasks
- #
+ * Rough factorization.
+ * Assumes that A is small, e.g. < 10^5
  */
 {
-  int N = 0;
-  int f = 2;
-  uint _A_ = A;
+    int N = 0;
+    int f = 2;
+    uint _A_ = A;
 
-  while ( f < A )
-    {
-      while( _A_ % f == 0 ) {
-	N++;
-	_A_ /= f; }
-
-      f++;
+    while (f < A) {
+        while (_A_ % f == 0) {
+            N++;
+            _A_ /= f;
+        }
+        f++;
     }
 
-  *Nfactors = N;
-  uint *_factors_ = (uint*)malloc( N * sizeof(uint) );
+    *Nfactors = N;
+    uint *_factors_ = (uint*)malloc(N * sizeof(uint));
 
-  N   = 0;
-  f   = 2;
-  _A_ = A;
+    N = 0;
+    f = 2;
+    _A_ = A;
 
-  while ( f < A )
-    {
-      while( _A_ % f == 0 ) {
-	_factors_[N++] = f;
-	_A_ /= f; }
-      f++;
+    while (f < A) {
+        while (_A_ % f == 0) {
+            _factors_[N++] = f;
+            _A_ /= f;
+        }
+        f++;
     }
 
-  *factors = _factors_;
-  return 0;
+    *factors = _factors_;
+    return 0;
 }
+#endif
+/* #if PURGE_SERIAL // parallel factorization */
+/* uint simple_factorization(uint A, int *Nfactors, uint **factors) { */
+/*     int max_threads = omp_get_max_threads(); */
+/*     uint **local_factors = malloc(max_threads * sizeof(uint *)); */
+/*     int *local_counts = calloc(max_threads, sizeof(int)); */
+/*     int *local_capacities = malloc(max_threads * sizeof(int)); */
+
+/*     // Initialize thread-local arrays */
+/*     for (int i = 0; i < max_threads; ++i) { */
+/*         local_capacities[i] = 16; */
+/*         local_factors[i] = malloc(local_capacities[i] * sizeof(uint)); */
+/*     } */
+
+/*     uint _A_ = A; */
+
+/*     #pragma omp parallel */
+/*     { */
+/*         int tid = omp_get_thread_num(); */
+/*         uint local_A = _A_; */
+/*         int local_count = 0; */
+
+/*         #pragma omp for schedule(static) */
+/*         for (int f = 2; f <= A / 2; ++f) { */
+/*             while (local_A % f == 0) { */
+/*                 if (local_count >= local_capacities[tid]) { */
+/*                     local_capacities[tid] *= 2; */
+/*                     local_factors[tid] = realloc(local_factors[tid], local_capacities[tid] * sizeof(uint)); */
+/*                 } */
+/*                 local_factors[tid][local_count++] = f; */
+/*                 local_A /= f; */
+/*             } */
+/*         } */
+/*         local_counts[tid] = local_count; */
+/*     } */
+
+/*     // Merge all thread-local results */
+/*     int total_count = 0; */
+/*     for (int i = 0; i < max_threads; ++i) */
+/*         total_count += local_counts[i]; */
+
+/*     uint *final_factors = malloc(total_count * sizeof(uint)); */
+/*     int offset = 0; */
+/*     for (int i = 0; i < max_threads; ++i) { */
+/*         for (int j = 0; j < local_counts[i]; ++j) */
+/*             final_factors[offset++] = local_factors[i][j]; */
+/*         free(local_factors[i]); */
+/*     } */
+
+/*     free(local_factors); */
+/*     free(local_counts); */
+/*     free(local_capacities); */
+
+/*     *Nfactors = total_count; */
+/*     *factors = final_factors; */
+/*     return 0; */
+/* } */
+/* #else //non-parallel factorization */
+/* extern uint simple_factorization( uint, int *, uint ** ); */
+
+/* inline uint simple_factorization( uint A, int *Nfactors, uint **factors ) */
+/* /* */
+/*  * rought factorization; */
+/*  * assumes that A is small, of the order of <~ 10^5 max, */
+/*  * since it represents the number of tasks */
+/*  # */
+/*  *1/ */
+/* { */
+/*   int N = 0; */
+/*   int f = 2; */
+/*   uint _A_ = A; */
+
+/*   while ( f < A ) */
+/*     { */
+/*       while( _A_ % f == 0 ) { */
+/* 	N++; */
+/* 	_A_ /= f; } */
+
+/*       f++; */
+/*     } */
+
+/*   *Nfactors = N; */
+/*   uint *_factors_ = (uint*)malloc( N * sizeof(uint) ); */
+
+/*   N   = 0; */
+/*   f   = 2; */
+/*   _A_ = A; */
+
+/*   while ( f < A ) */
+/*     { */
+/*       while( _A_ % f == 0 ) { */
+/* 	_factors_[N++] = f; */
+/* 	_A_ /= f; } */
+/*       f++; */
+/*     } */
+
+/*   *factors = _factors_; */
+/*   return 0; */
+/* } */
 
 
 extern int memory_allocate ( const int       *,
@@ -229,7 +396,7 @@ inline int update_plane(const int periodic, const vec2_t N, const plane_t *oldpl
 
         // Select schedule policy via preprocessor
         #if OPENMP_SCHEDULE == SCHED_STATIC
-            #pragma omp for schedule(static, OMP_CHUNK_SIZE) nowait
+            #pragma omp for schedule(static) nowait
         #elif OPENMP_SCHEDULE == SCHED_DYNAMIC
             #pragma omp for schedule(dynamic, OMP_CHUNK_SIZE) nowait
         #elif OPENMP_SCHEDULE == SCHED_GUIDED
@@ -322,65 +489,6 @@ inline int get_total_energy(plane_t *plane, double *energy)
 
     #undef IDX
 }
-
-// inline int get_total_energy( plane_t *plane,
-//                              double  *energy )
-// /*
-//  * NOTE: this routine a good candiadate for openmp
-//  *       parallelization
-//  */
-// {
-
-//     const int register xsize = plane->size[_x_];
-//     const int register ysize = plane->size[_y_];
-//     const int register fsize = xsize+2;
-
-//     double * restrict data = plane->data;
-    
-//    #define IDX( i, j ) ( (j)*fsize + (i) )
-
-//    #if defined(LONG_ACCURACY)    
-//     long double totenergy = 0;
-//     #pragma omp parallel for reduction(+:totenergy) schedule(static)
-//     for (int j = 1; j <= ysize; j++) {
-//         int tid = omp_get_thread_num();
-//         // printf("Inside get_total_energy:Thread %d processing row %d\n", tid, j);
-//         #pragma GCC unroll 4
-//         for (int i = 1; i <= xsize; i++) {
-//             totenergy += data[IDX(i, j)];
-//         }
-//     }
-//     *energy = (double)totenergy;
-//    #else
-//     double totenergy = 0;    
-//     #pragma omp parallel for reduction(+:totenergy) schedule(static)
-//     for (int j = 1; j <= ysize; j++) {
-//         int tid = omp_get_thread_num();
-//         // printf("Inside get_total_energy:Thread %d processing row %d\n", tid, j);
-//         #pragma GCC unroll 4
-//         for (int i = 1; i <= xsize; i++) {
-//             totenergy += data[IDX(i, j)];
-//         }
-//     }
-//     *energy = totenergy;
-//    #endif
-
-//     // HINT: you may attempt to
-//     //       (i)  manually unroll the loop
-//     //       (ii) ask the compiler to do it
-//     // for instance
-//     // #pragma GCC unroll 4
-//     // for ( int j = 1; j <= ysize; j++ )
-//     //     for ( int i = 1; i <= xsize; i++ )
-//     //         totenergy += data[ IDX(i, j) ];
-
-    
-//    #undef IDX
-
-//     *energy = (double)totenergy;
-//     return 0;
-// }
-
 
 inline int memory_allocate ( const int       *neighbours  ,
 		            const vec2_t     N           ,
@@ -834,8 +942,10 @@ if (*verbose > 0){
       int   Nf;
       uint *factors;
       uint  first = 1;
+      double start_fact = omp_get_wtime();     
       ret = simple_factorization( Ntasks, &Nf, &factors );
-      
+      double end_fact = omp_get_wtime();
+      factorization_time = end_fact - start_fact;  
       for ( int i = 0; (i < Nf) && ((Ntasks/first)/first > formfactor); i++ )
 	first *= factors[i];
 

@@ -1,0 +1,3 @@
+num_threads,func_id,avg_time,max_time,min_time,imbalance_ratio
+16,0,0.100139,1.601704,0.000035,100.00
+16,1,0.097719,1.562979,0.000035,100.00
