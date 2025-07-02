@@ -133,6 +133,6 @@ if __name__ == "__main__":
 
     # plot_strong_scaling("multinode_results_STRONG.csv")
     # plot_weak_metrics("weak_metrics.csv")
-    plot_strong_scaling("multinode_results_STRONG_NEW.csv")
-    plot_weak_metrics("weak_metrics_NEW.csv")
+    plot_strong_scaling("multinode_results_STRONG.csv")
+    # plot_weak_metrics("weak_metrics_NEW.csv")
 

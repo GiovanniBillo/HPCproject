@@ -1,0 +1,5 @@
+Nodes,Func 0 Imbalance (old),Func 1 Imbalance (old),Func 0 Imbalance (new),Func 1 Imbalance (new)
+1,73.31,55.95,100.0,99.14
+2,39.71,20.6,72.23,90.67
+8,27.74,77.06,96.37,79.73
+16,100.0,100.0,97.1,51.55
